@@ -513,7 +513,7 @@ export function guardWrites(steps: TodoStep[]): TodoStep[] {
     const push = /\s--push\b/.test(write);
     const dry = write.replace(/\s--(commit|push)\b/g, "");
     return [
-      { who: s.who, text_zh: "先跑一遍体检看结果（只读，不提交也不推送）", text_en: "First run the check and look at the result (read-only: nothing committed or pushed)", command: dry, confirm: false },
+      { who: s.who, text_zh: "先跑一遍检查看结果（只读，不提交也不推送）", text_en: "First run the check and look at the result (read-only: nothing committed or pushed)", command: dry, confirm: false },
       push
         ? { who: s.who, text_zh: `看过结果后确认，再运行 ${write}（会提交并推送状态分支）`, text_en: `Once you have looked, confirm and run ${write} (commits and pushes the status branch)`, command: null, confirm: true }
         : { who: s.who, text_zh: `看过结果后确认，再运行 ${write}（会提交到本地状态分支）`, text_en: `Once you have looked, confirm and run ${write} (commits to the local status branch)`, command: null, confirm: true },
@@ -778,12 +778,22 @@ export function aiTaskFor(t: Pick<Todo, "actor"> & { ai_task?: AiTask | null }):
   return t.actor === "notice" ? "logs" : "prepare";
 }
 
+/** Where the AI works, as part of a fact: `workdir` is the folder on this machine commands run in; `command_prefix`
+ *  goes before every bin/agent-env command; `manifest` is the manifest file, or null when no personal manifest was
+ *  found. Empty values are left out. */
+export interface FactWhere {
+  workdir?: string;
+  command_prefix?: string;
+  manifest?: string | null;
+}
+export const factWhere = (w: FactWhere): FactWhere => ({ ...(w.workdir ? { workdir: w.workdir } : {}), ...(w.command_prefix ? { command_prefix: w.command_prefix } : {}), ...(w.manifest === null ? { manifest: null } : w.manifest ? { manifest: w.manifest } : {}) });
+
 /** The context an AI Task gets for one thing to do: only that issue's fields, as JSON, at most `limit` characters
  *  (steps are dropped from the end, then the title is cut, when it would not fit). */
-export function todoPayload(t: Todo, limit = 2000): string {
+export function todoPayload(t: Todo, limit = 2000, where: FactWhere = {}): string {
   const steps = t.steps.map((s) => ({ who: s.who, text_zh: s.text_zh, command: s.command, confirm: s.confirm }));
   const make = (n: number, title = t.title_zh) =>
-    JSON.stringify({ id: t.id, env: t.env, target: t.target, title_zh: title, steps: steps.slice(0, n), ai_task: t.ai_task ?? aiTaskFor(t), ref: t.ref });
+    JSON.stringify({ id: t.id, env: t.env, target: t.target, title_zh: title, steps: steps.slice(0, n), ai_task: t.ai_task ?? aiTaskFor(t), ref: t.ref, ...factWhere(where) });
   for (let n = steps.length; n >= 0; n--) {
     const text = make(n);
     if (text.length <= limit) return text;
@@ -801,9 +811,9 @@ export function batchTodos(todos: Todo[]): Todo[] {
   return todos.filter((t) => t.actor === "ai");
 }
 
-export function batchPayload(todos: Todo[], label: string, limit = 2000): { preset: string; facts: { label: string; value: string }[] } {
+export function batchPayload(todos: Todo[], label: string, limit = 2000, where: FactWhere = {}): { preset: string; facts: { label: string; value: string }[] } {
   const items = batchTodos(todos).slice(0, 20);
-  return { preset: "fix-drift", facts: items.map((t, i) => ({ label: `${label} ${i + 1}`, value: todoPayload(t, limit) })) };
+  return { preset: "fix-drift", facts: items.map((t, i) => ({ label: `${label} ${i + 1}`, value: todoPayload(t, limit, where) })) };
 }
 
 /** Which buttons a thing to do gets, the same in every tab. */

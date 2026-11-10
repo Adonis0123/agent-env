@@ -13,9 +13,13 @@ const NOW = Date.parse("2026-11-09T08:00:00Z");
 const FIX = (name: string) => join(import.meta.dirname, "fixtures", `${name}.json`);
 const fixture = (name: string) => JSON.parse(readFileSync(FIX(name), "utf8"));
 
+/** A made-up folder, so no test depends on where this checkout is: the manifest's folder and the one commands run in. */
+const WORK = { overlay: "/home/example-user/agent-home", run: "/home/example-user/agent-home/vendor/agent-env" };
+const unesc = (x: string) => x.replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&amp;/g, "&");
+
 /** The fragment for a status file, without a server: the handler writes into a stand-in response. */
 async function fragment(statusFile: string, o: { lang?: "en" | "zh"; ask?: boolean } = {}): Promise<string> {
-  const handle = createPanelHandler({ allowedHosts: ["h"], lang: o.lang ?? "zh", now: () => NOW, statusFile, ...(o.ask ? { ask: { bridge: "postMessage" } } : {}) });
+  const handle = createPanelHandler({ allowedHosts: ["h"], lang: o.lang ?? "zh", now: () => NOW, statusFile, folders: WORK, ...(o.ask ? { ask: { bridge: "postMessage" } } : {}) });
   let body = "";
   const res = { statusCode: 0, setHeader() {}, end(b?: string) { body = b ?? ""; } } as unknown as ServerResponse;
   await handle({ url: "/fragment", method: "GET", headers: { host: "h", "x-env-fragment": "1" } } as unknown as IncomingMessage, res);
@@ -37,10 +41,14 @@ test("plugins tab: four columns from the sources to the environments, each repos
   // checked repositories say public or private; the one the host could not answer says why and how to fix it
   assert.match(p, /href="https:\/\/github.com\/example-user\/agent-plugin-public"[^>]*>agent-plugin-public<\/a><span class="pv-vis v-public"[^>]*>公开<\/span>/);
   assert.match(p, /agent-plugin-personal<\/a><span class="pv-vis v-private"[^>]*><svg[^]*?<\/svg>私有<span class="pv-empty">空仓<\/span><\/span>/);
-  assert.match(p, /agent-plugin-company<\/a><span class="pv-vis v-unknown" data-tip="tool 没查到：401 Unauthorized\n修法: 确认能联网并已登录（tool login）[^"]*">未知<\/span><\/div><p class="pv-why">tool 没查到：401 Unauthorized<\/p><span class="pv-fix">确认能联网并已登录（tool login）/);
+  // what is wrong, what it means, the engine's detail, the remedy in words, and a sentence to give the AI
+  assert.match(p, /agent-plugin-company<\/a><span class="pv-vis v-unknown" data-tip="查不到这个仓库是公开还是私有，所以没法确认私有内容没有被公开。\ntool 没查到：401 Unauthorized">没查到<\/span><\/div><p class="pv-why">查不到这个仓库是公开还是私有，所以没法确认私有内容没有被公开。<\/p><p class="pv-why">tool 没查到：401 Unauthorized<\/p><span class="pv-fix">确认能联网并已登录（tool login）[^<]*<\/span><span class="pv-cmd"><button[^>]*data-copy="帮我处理这个问题：查不到 agent-plugin-company 这个仓库是公开还是私有（tool 没查到：401 Unauthorized）。面板给的做法是：确认能联网并已登录（tool login）[^"]*。要运行命令的话，在本机的 \/home\/example-user\/agent-home\/vendor\/agent-env 目录里运行。会改动或上传东西的步骤，先给我看，等我同意再做。" data-ai-copy[^>]*>复制给 AI</);
   // the view bar: when it was checked, how many are unknown, the refresh command, the AI button
-  assert.match(p, /<div class="viewbar pv-bar"><p class="pv-checked">仓库公开还是私有：查于 今天 \d\d:\d\d<span class="pv-unknown-n">1 个未知<\/span><span class="pv-refresh">重新查：<\/span><span class="pv-cmd"><code>bin\/agent-env plugin repos --refresh<\/code><button[^>]*data-copy="bin\/agent-env plugin repos --refresh"/);
-  assert.match(p, new RegExp(`<button type="button" class="lt-btn lt-btn-sm" data-ask="${PLUGINS_PRESET}" data-fact="fact-plugins"[^>]*>让 AI 调整</button>`));
+  assert.match(p, /<div class="viewbar pv-bar"><p class="pv-checked">仓库公开还是私有：查于 今天 \d\d:\d\d<span class="pv-unknown-n">1 个没查到<\/span><span class="pv-refresh">重新查：<\/span><span class="pv-cmd"><button type="button" class="lt-btn lt-btn-sm lt-btn-ghost" data-copy="帮我重新查一下各个仓库是公开还是私有（在 \/home\/example-user\/agent-home\/vendor\/agent-env 目录里运行 bin\/agent-env plugin repos --refresh）。" data-ai-copy[^>]*>复制给 AI<\/button><code>bin\/agent-env plugin repos --refresh<\/code><\/span>/);
+  // a command that writes asks the AI to show the change first; no button copies a bare command
+  assert.match(p, /data-copy="帮我处理这个问题：agent-plugin-public: 未推送（在 [^ ]+ 目录里运行 bin\/agent-env plugin publish --all）。会改动或上传东西的步骤，先给我看，等我同意再做。"/);
+  for (const m of p.matchAll(/data-copy="([^"]*)"/g)) assert.match(unesc(m[1]), /^帮我/, "every copy button copies a sentence for an AI");
+  assert.match(p, new RegExp(`<button type="button" class="lt-btn lt-btn-sm" data-ask="${PLUGINS_PRESET}" data-fact="fact-plugins"[^>]*>让 AI 调整插件</button>`));
   assert.match(p, /<textarea id="fact-plugins" hidden readonly>/);
   // repository notes from the engine, with their fix
   assert.match(p, /插件未定义/);
@@ -53,7 +61,7 @@ test("plugins tab: what each environment gets, one row per environment, one colu
   const rows = [...table.matchAll(/<tr class="[^"]*"><th scope="row"><span class="pv-name">([^<]+)<\/span>/g)].map((m) => m[1]);
   assert.deepEqual(rows, ["Mac", "WSL", "小 helper 的云主机", "Grok Bot", "别人的机器"]);
   // an environment not on plugins yet: one cell across the four columns
-  assert.match(table, /<td class="c is-legacy" colspan="4"><span class="pv-legacy">还没改成插件（阶段 4）<\/span><span class="pv-sub">现在：直接读来源仓<\/span><\/td>/);
+  assert.match(table, /<td class="c is-legacy" colspan="4"><span class="pv-legacy">还在用旧办法，没改成插件（第 4 阶段改）<\/span><span class="pv-sub">现在：直接读来源仓<\/span><\/td>/);
   // Grok Bot: the public plugin, company denied by the manifest, its pointer rule note
   const bot = table.slice(table.indexOf("Grok Bot</span>"), table.indexOf("别人的机器"));
   assert.match(bot, /data-label="公开"><span class="pv-pl">demo-public<\/span><\/td>/);
@@ -85,7 +93,7 @@ test("plugins tab: one of the user's own machines on plugins composes them itsel
 
 test("plugins tab: a status without plugins_view shows an empty state, the engine's error shows as an error", async () => {
   const p = panel(await fragment(FIX("v7-relations")));
-  assert.match(p, /<div class="empty" role="status" data-pv="absent"><p><strong>这份状态里没有插件数据<\/strong>/);
+  assert.match(p, /<div class="empty" role="status" data-pv="absent"><p><strong>还没有插件信息<\/strong><\/p><p>生成这份数据的检查工具版本较旧[^<]*把下面这句话复制给你的 AI[^<]*<\/p><div class="fix-line"><span class="pv-cmd"><button[^>]*data-copy="帮我把 agent-env 更新到最新版（先告诉我你打算怎么更新，等我同意再动手），再把每台机器重新检查一遍，让「插件」标签有内容可显示（在 [^ ]+ 目录里运行 bin\/agent-env status --json --all）。会改动或上传东西的步骤，先给我看，等我同意再做。"/);
   assert.doesNotMatch(p, /fact-plugins|data-ask/);
   assert.deepEqual(readPluginsView(undefined), { kind: "absent" });
   assert.deepEqual(readPluginsView({ refresh_command: "x", error: { message: "插件视图算不出来（KeyError）", fix: "bin/agent-env check 看清单哪里不对" } }), { kind: "error", message: "插件视图算不出来（KeyError）", fix: "bin/agent-env check 看清单哪里不对", refresh: "x" });
@@ -117,5 +125,15 @@ test("plugins tab: every string has a Chinese text, and the AI preset exists", a
   assert.match(preset.pointers.zh, /deny_visibility/);
   // outside the portal the same button copies the notes instead
   const plain = panel(await fragment(FIX("v8-plugins")));
-  assert.match(plain, /data-copy-from="fact-plugins"[^>]*>复制调整说明</);
+  const copy = /data-copy-from="fact-plugins" data-copy-lead="([^"]*)" data-ai-copy[^>]*>复制调整要求给 AI</.exec(plain);
+  assert.ok(copy);
+  // the lead is the preset's own request, the folder commands run in and the manifest file to edit; the fact
+  // names both too
+  assert.equal(unesc(copy[1]), `${preset.what.zh}\n在 /home/example-user/agent-home/vendor/agent-env 目录里做，命令都在这里运行。\n要改的清单是 /home/example-user/agent-home/manifest/habits.toml。\n下面是面板给出的数据：`);
+  const where = JSON.parse(unesc(/<textarea id="fact-plugins" hidden readonly>(.*?)<\/textarea>/s.exec(plain)![1]));
+  assert.equal(where.workdir, "/home/example-user/agent-home/vendor/agent-env");
+  assert.equal(where.manifest, "/home/example-user/agent-home/manifest/habits.toml");
+  // the declaration carries no folder of anyone's machine: the page's facts say where to work
+  assert.equal(tasks.tools.env.cwd, "engine");
+  assert.doesNotMatch(JSON.stringify(tasks), /coding\/agent-env|\/Users\/|\/home\//);
 });

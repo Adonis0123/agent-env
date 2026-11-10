@@ -59,6 +59,7 @@ import {
   writeRelFilter,
   writeTab,
 } from "./model.ts";
+import { aiFixText, aiLead, aiSentence, type AiStep, aiStepsText, aiStepText, readsOnly, type SentenceOptions } from "./ai-copy.ts";
 import { PLUGINS_CSS, PLUGINS_PRESET, pluginsFact, pluginsHtml, readPluginsView } from "./plugins-view.ts";
 import type { LoadFailure, LoadResult } from "./source.ts";
 
@@ -71,6 +72,30 @@ export interface Ctx {
   now: number;
   /** The portal draws the page title in its own header bar; the page keeps the title for screen readers only. */
   headerBar?: boolean;
+  /** The folder `bin/agent-env` commands run in on this machine (source.ts workFolders().run); goes into every
+   *  sentence and fact handed to an AI. The server shows the home folder as `~`. */
+  workdir?: string;
+  /** The manifest file the engine reads (workFolders().manifest), for tasks that edit it; "" when none was found. */
+  manifest?: string;
+  /** No personal manifest was found: `workdir` is only the engine's own folder; sentences, facts and the footer say so. */
+  noManifest?: boolean;
+  /** `AGENT_ENV_MANIFEST=<path>` to put before every bin/agent-env command, or "" (workFolders().env). */
+  envPrefix?: string;
+}
+
+type Place = Pick<Ctx, "workdir" | "noManifest" | "envPrefix">;
+/** Where commands run on this machine, for ai-copy.ts. */
+const whereOf = (ctx: Place) => ({ dir: ctx.workdir, env: ctx.envPrefix, noManifest: ctx.noManifest });
+/** The same, for the facts handed to an AI: `command_prefix` and `manifest: null` only when they apply. */
+const factWhere = (ctx: Place) => ({ workdir: ctx.workdir ?? "", ...(ctx.envPrefix ? { command_prefix: ctx.envPrefix } : {}), ...(ctx.noManifest ? { manifest: null } : {}) });
+
+const copyButton = (ctx: Pick<Ctx, "t">, text: string, o: { quiet?: boolean; label?: string } = {}) =>
+  `<button type="button" class="lt-btn lt-btn-sm${o.quiet === false ? "" : " lt-btn-ghost"}" data-copy="${esc(text)}" data-ai-copy data-tip="${esc(ctx.t("Copies a sentence to paste to your AI; the command is inside it"))}">${esc(o.label ?? ctx.t("Copy for AI"))}</button>`;
+
+/** The one copy button for anything an AI should do: it copies a plain sentence (ai-copy.ts) with the commands inside
+ *  it. `what` is already in the page's language and continues 帮我… / Please …. */
+export function aiCopyButton(ctx: Pick<Ctx, "t" | "lang"> & Place, what: string, commands: string[] = [], o: SentenceOptions & { quiet?: boolean; label?: string } = {}): string {
+  return copyButton(ctx, aiSentence(ctx.lang, what, commands, { ...whereOf(ctx), ...o }), o);
 }
 
 /** ai-tasks.json preset per `issue.ai_task`. */
@@ -145,6 +170,8 @@ export const CSS = `
      place (the shared scrollbar-gutter asks for the same; this holds where that does not). */
   html { overflow-y: scroll; }
   .views > nav { position: relative; }
+  /* five tabs in one row on a phone: the English names need the room the shared 4px gap takes (DESIGN.md) */
+  @media (max-width: 420px) { .views > nav { gap: 0; } }
   .view-ink { position: absolute; left: 0; bottom: -1px; width: 1px; height: 2px; background: var(--lt-brand-strong, var(--kit-accent, #43721d)); transform-origin: 0 50%; visibility: hidden; pointer-events: none; will-change: transform; }
   .views > nav.has-ink > .view-ink { visibility: visible; transition: transform var(--duration-slow, 200ms) var(--ease-out, cubic-bezier(0.2, 0, 0, 1)); }
   .views > nav.has-ink > [role="tab"]::after { content: none; }
@@ -388,6 +415,8 @@ export const CSS = `
   .error { border-style: solid; border-color: var(--kit-fail-bar, #eb5757); background: var(--kit-fail-soft, #fdf0ee); color: var(--kit-text, inherit); }
   .error h3 { margin-top: 12px; }
   .fix-line { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; font-size: 13px; }
+  .fail-detail > span { margin-right: 8px; color: var(--kit-faint, #999); }
+  .fail-detail code { overflow-wrap: anywhere; }
   .fix-line code { padding: 0 4px; border-radius: 4px; background: var(--kit-surface-muted, #f4f4f4); word-break: break-all; }
   .loading { display: flex; align-items: center; gap: 12px; }
   .spinner { width: 16px; height: 16px; border-radius: 50%; border: 2px solid var(--kit-border, #ddd); border-top-color: var(--kit-accent, #43721d); animation: spin 0.8s linear infinite; }
@@ -492,7 +521,7 @@ function ago(ctx: Ctx, days: number | null): string {
 }
 
 /** Role ids to translatable labels; an unlisted role shows as reported. */
-const ROLE_LABELS: Record<string, string> = { cli: "coding CLI", "coding-cli": "coding CLI", bot: "chat bot", cron: "scheduled jobs", remote: "cloud-hosted" };
+const ROLE_LABELS: Record<string, string> = { cli: "coding assistant", "coding-cli": "coding assistant", bot: "chat bot", cron: "scheduled jobs", remote: "cloud-hosted" };
 
 function roleText(ctx: Ctx, r: AgentRow): string {
   if (!r.roles.length) return r.short !== r.host ? r.short : "";
@@ -543,7 +572,7 @@ function whereText(v: View, t: Todo): string {
 // ---- the one component: a thing to do ----
 
 /** `name`: what this button is for, when several buttons with the same label sit side by side (one per thing to do
- *  behind the same cell); the label then reads "Copy fix notes: <name>". */
+ *  behind the same cell); the label then reads "Copy for AI: <name>". */
 function aiButton(ctx: Ctx, v: View, t: Todo, task: AiTask, quiet: boolean, name = ""): string {
   const { t: tr } = ctx;
   const fact = v.facts.get(t.id) ?? "";
@@ -551,12 +580,12 @@ function aiButton(ctx: Ctx, v: View, t: Todo, task: AiTask, quiet: boolean, name
   const label = (text: string) => esc(name ? tr("{label}: {name}", { label: text, name }) : text);
   return ctx.askBridge
     ? `<button type="button" class="${cls}" data-ask="${AI_PRESETS[task]}" data-fact="${esc(fact)}" data-tip="${esc(tr(AI_TIP[task]))}">${label(tr(AI_LABEL[task]))}</button>`
-    : `<button type="button" class="${cls}" data-copy-from="${esc(fact)}" data-tip="${esc(tr("Paste it to an AI to work on"))}">${label(tr("Copy fix notes"))}</button>`;
+    : `<button type="button" class="${cls}" data-copy-from="${esc(fact)}" data-copy-lead="${esc(aiLead(ctx.lang, AI_PRESETS[task], whereOf(ctx)))}" data-ai-copy data-tip="${esc(tr("Copies this problem, written for an AI. Paste it to your AI and it takes it from there"))}">${label(tr("Copy for AI"))}</button>`;
 }
 
 /** A thing to do, one or two lines: [who] title · where, then its impact in grey. One main button (model.ts
  *  rowActions: the AI button, or "copy commands" for another machine); "more" opens the rest: the steps with their
- *  commands, the other buttons and the CLI's own names. `key` must be unique on the page; the same thing to do shows in all three tabs under different keys.
+ *  commands (each with its copy-for-AI button), the portal's AI button and the internal names. `key` must be unique on the page; the same thing to do shows in all three tabs under different keys.
  *  `who: false` leaves out the actor icon where a group label already says it; `where: false` leaves out the place. */
 export function todoHtml(ctx: Ctx, v: View, t: Todo, key: string, opts: { where?: boolean; who?: boolean } = {}): string {
   const { t: tr } = ctx;
@@ -565,11 +594,14 @@ export function todoHtml(ctx: Ctx, v: View, t: Todo, key: string, opts: { where?
   const who = opts.who === false ? "" : whoMark(ctx, v, t.actor);
   const impact = t.impact_zh ? `<p class="todo-impact">${esc(pick(ctx, t.impact_zh, t.impact_en))}</p>` : "";
   const main = `<div class="todo-main"><div class="todo-line">${who}<h3 class="todo-title">${esc(pick(ctx, t.title_zh, t.title_en))}</h3>${where}</div>${impact}</div>`;
-  const copyAll = acts.commands.length
-    ? (quiet: boolean) => `<button type="button" class="lt-btn lt-btn-sm${quiet ? " lt-btn-ghost" : ""}" data-copy="${esc(acts.commands.join("\n"))}">${esc(acts.commands.length === 1 ? tr("Copy command") : tr("Copy {n} commands", { n: acts.commands.length }))}</button>`
-    : () => "";
-  const primary = acts.primary === "copy" ? copyAll(false) : aiButton(ctx, v, t, acts.ai, false);
-  const moreLabel = tr("More: steps, commands and the CLI's own names");
+  const title = pick(ctx, t.title_zh, t.title_en);
+  // every step says where it runs from its own `who`: the other machine, or this machine's folder
+  const aiSteps = t.steps.map((s): AiStep => ({ who: s.who, text: pick(ctx, s.text_zh, s.text_en), command: s.command, confirm: s.confirm }));
+  const place = { ...whereOf(ctx), machine: t.env };
+  const primary = acts.primary === "copy"
+    ? copyButton(ctx, aiStepsText(ctx.lang, title, aiSteps, place), { quiet: false })
+    : aiButton(ctx, v, t, acts.ai, false);
+  const moreLabel = tr("More: the steps, with the commands for your AI");
   const more = `<button type="button" class="lt-btn lt-btn-sm lt-btn-icon" aria-expanded="false" aria-controls="${key}" data-toggle="${key}" aria-label="${esc(moreLabel)}" data-tip="${esc(moreLabel)}">${icon("more")}</button>`;
   const steps = t.steps.length
     ? `<ol class="steps">${t.steps
@@ -579,14 +611,15 @@ export function todoHtml(ctx: Ctx, v: View, t: Todo, key: string, opts: { where?
           // the dry-run wording only when an earlier step is a dry run; local delivery has none
           const afterDryRun = t.steps.slice(0, i).some((x) => x.command?.includes("--dry-run"));
           const confirm = s.confirm ? `<span class="confirm-note">${esc(afterDryRun ? tr("look at the dry run, then confirm") : tr("Run it only after you confirm"))}</span>` : "";
-          const cmd = s.command ? `<div class="cmd"><code>${esc(s.command)}</code><button type="button" class="lt-btn lt-btn-sm lt-btn-ghost" data-copy="${esc(s.command)}">${esc(tr("Copy"))}</button></div>` : "";
+          const cmd = s.command ? `<div class="cmd"><code>${esc(s.command)}</code>${copyButton(ctx, aiStepText(ctx.lang, title, aiSteps, i, place), { quiet: false, label: tr("Copy this step for AI") })}</div>` : "";
           return `<li class="step${s.confirm ? " is-confirm" : ""}" id="${key}-s${i}"><div class="step-body"><p class="step-text"><span class="step-who">${esc(whoText)}</span><span>${esc(text)}</span>${confirm}</p>${cmd}</div></li>`;
         })
         .join("")}</ol>`
     : "";
-  const rest = [acts.aiInMore ? aiButton(ctx, v, t, acts.ai, true) : "", acts.copyInMore ? copyAll(true) : ""].filter(Boolean);
+  // the portal's AI task stays one click away when the main button copies; without the portal both would copy
+  const rest = [acts.aiInMore && ctx.askBridge ? aiButton(ctx, v, t, acts.ai, true) : ""].filter(Boolean);
   const raw = [t.ref.kind, t.ref.name || t.ref.case, t.state].filter(Boolean).join(" · ");
-  const rawLine = raw ? `<p class="raw-line"><span>${esc(tr("As named in the CLI"))}</span><code>${esc(raw)}</code></p>` : "";
+  const rawLine = raw ? `<p class="raw-line"><span>${esc(tr("Internal name, for your AI"))}</span><code>${esc(raw)}</code></p>` : "";
   const folded = `<div class="todo-more" id="${key}" hidden>${steps}${rest.length ? `<div class="more-acts">${rest.join("")}</div>` : ""}${rawLine}</div>`;
   return `<article class="todo" data-todo="${esc(t.id)}" data-actor="${t.actor}">${main}<div class="todo-acts">${primary}${more}</div>${folded}</article>`;
 }
@@ -628,15 +661,24 @@ function headline(ctx: Ctx, todos: Todo[]): { line: string; action: string } {
     ? ""
     : ctx.askBridge
       ? `<button type="button" class="lt-btn lt-btn-primary" data-ask-all="fix-drift" data-batch="${batch}" data-tip="${esc(t("Sends every problem AI can fix by itself, each with its own context; AI shows you each step before running it"))}">${esc(t("Let AI fix all ({n})", { n: batch }))}</button>`
-      : `<button type="button" class="lt-btn" data-copy-from="batch-notes" data-batch="${batch}">${esc(t("Copy fix notes ({n})", { n: batch }))}</button>`;
+      : `<button type="button" class="lt-btn" data-copy-from="batch-notes" data-copy-lead="${esc(aiLead(ctx.lang, "fix-drift", whereOf(ctx)))}" data-ai-copy data-batch="${batch}" data-tip="${esc(t("Copies every problem AI can fix by itself, written for an AI. Paste it to your AI"))}">${esc(t("Copy all {n} for AI", { n: batch }))}</button>`;
   return { line: `<p class="headline" data-count-total="${todos.length}">${esc(todos.length === 1 ? t("1 thing to handle") : t("{n} things to handle", { n: todos.length }))}</p>`, action };
+}
+
+/** Shown when no personal manifest was found: what is wrong, what it means, and the sentence to give the AI. */
+function noManifestHtml(ctx: Ctx, tag: "span" | "p"): string {
+  if (!ctx.noManifest) return "";
+  const { t } = ctx;
+  const dir = ctx.workdir ? (ctx.lang === "zh" ? `（${ctx.workdir}）` : ` (${ctx.workdir})`) : "";
+  const ask = t("find the folder that holds my personal agent-env manifest (manifest/habits.toml) and tell me where it is. The Environments panel cannot find it: it looks in the folder it is installed in{dir} and up to three folders above, or reads AGENT_ENV_MANIFEST. Do not change anything yet", { dir });
+  return `<${tag} class="no-manifest" data-no-manifest>${esc(t("No personal manifest (manifest/habits.toml) was found, so the page cannot tell which folder is yours. The sentences you copy ask your AI to find it first; or give your AI this one:"))} ${copyButton(ctx, aiSentence(ctx.lang, ask))}</${tag}>`;
 }
 
 function footHtml(ctx: Ctx, all: AllStatus, preview?: string, glossary = true, todos: Todo[] = []): string {
   const { t } = ctx;
   const note = preview ? `<span class="preview-note">${esc(t("Preview data from {file}", { file: preview }))}</span>` : "";
   const link = glossary ? `<button type="button" class="linkish" data-gloss aria-haspopup="dialog" aria-controls="gloss">${esc(t("Glossary"))}</button>` : "";
-  return `<footer class="foot">${freshHtml(ctx, all, todos)}${note}${link}</footer>`;
+  return `<footer class="foot">${freshHtml(ctx, all, todos)}${note}${noManifestHtml(ctx, "span")}${link}</footer>`;
 }
 
 // ---- glossary: one copy, in a drawer ----
@@ -893,20 +935,27 @@ function originLine(ctx: Ctx, g: RelationGraph, env: string, origins: string[]):
 }
 
 /** A fix: one copyable line per command (writes and confirmations stay in the Inbox's steps), or the sentence. */
-function fixHtml(ctx: Ctx, fix: string): string {
+function fixHtml(ctx: Ctx, fix: string, what = ""): string {
   if (!fix) return "";
   const f = habitFix(fix);
-  const cmds = f.commands.map((c) => `<div class="cmd"><code>${esc(c)}</code><button type="button" class="lt-btn lt-btn-sm lt-btn-ghost" data-copy="${esc(c)}">${esc(ctx.t("Copy"))}</button></div>`).join("");
-  const text = f.text ? `<p class="rp-fix">${esc(f.text)}</p>` : "";
   const confirm = f.confirm && f.commands.length ? `<p class="rp-fix">${esc(ctx.t("The step that needs your OK is in the To do tab"))}</p>` : "";
-  return text + cmds + confirm;
+  // the fix is exactly one command: a sentence with that command, careful unless it only reads
+  if (f.commands.length === 1 && f.commands[0] === fix.trim()) {
+    const c = f.commands[0];
+    return `<div class="cmd"><code>${esc(c)}</code>${aiCopyButton(ctx, ctx.t("handle this problem: {what}", { what: what || fix }), [c], { careful: f.confirm || !readsOnly(c), quiet: false })}</div>${confirm}`;
+  }
+  // a sentence (it may name several commands whose order matters): the commands show as before, as code, and one
+  // button copies the whole fix, so no command is handed out apart from the ones before it
+  const cmds = f.commands.map((c) => `<div class="cmd"><code>${esc(c)}</code></div>`).join("");
+  const text = f.text ? `<p class="rp-fix">${esc(f.text)}</p>` : "";
+  return `${text}${cmds}<div class="rp-fix-copy">${copyButton(ctx, aiFixText(ctx.lang, what || fix, fix, whereOf(ctx)), { quiet: false })}</div>${confirm}`;
 }
 
 /** One kind of one agent: its source once, problems open with their reason and fix, the rest one folded line. */
 function kindSection(ctx: Ctx, v: View, g: RelationGraph, a: RelNode, k: AgentKind, opts: { hidden: boolean; heading: boolean }): string {
   const { t } = ctx;
   let bad = k.problems.length
-    ? `<ul class="rp-bad">${k.problems.map((h) => `<li><p class="rp-line"><span class="rp-name">${esc(itemName(h))}</span>${mark(h.state, word(ctx, v, h.state))}</p>${h.detail ? `<p class="rp-why">${esc(h.detail)}</p>` : ""}${fixHtml(ctx, h.fix)}</li>`).join("")}</ul>`
+    ? `<ul class="rp-bad">${k.problems.map((h) => `<li><p class="rp-line"><span class="rp-name">${esc(itemName(h))}</span>${mark(h.state, word(ctx, v, h.state))}</p>${h.detail ? `<p class="rp-why">${esc(h.detail)}</p>` : ""}${fixHtml(ctx, h.fix, `${agentName(ctx, a)} · ${itemName(h)} (${word(ctx, v, h.state)})${h.detail ? `: ${h.detail}` : ""}`)}</li>`).join("")}</ul>`
     : "";
   let rest = "";
   if (k.rest.length) {
@@ -977,7 +1026,7 @@ function relPane(ctx: Ctx, v: View, all: AllStatus, g: RelationGraph, n: RelNode
     const role = n.roles.map((x) => (ROLE_LABELS[x] ? t(ROLE_LABELS[x]) : x)).join(" · ");
     const ks = agentKinds(n);
     extra = ` data-default-kind="${(ks.find((k) => k.problems.length) ?? ks[0])?.kind ?? ""}"`;
-    body = `<header class="rp-head"><h3>${esc(agentName(ctx, n))}</h3><p class="rp-meta">${esc([env?.label ?? n.env, role].filter(Boolean).join(" · "))}<button type="button" class="linkish" data-goto="${esc(n.id)}" data-goto-env="${esc(n.env)}">${esc(t("See it under By machine"))}</button></p></header>${agentDetail(ctx, v, g, n, "tabs")}`;
+    body = `<header class="rp-head"><h3>${esc(agentName(ctx, n))}</h3><p class="rp-meta">${esc([env?.label ?? n.env, role].filter(Boolean).join(" · "))}<button type="button" class="linkish" data-goto="${esc(n.id)}" data-goto-env="${esc(n.env)}">${esc(t("See it under Machines"))}</button></p></header>${agentDetail(ctx, v, g, n, "tabs")}`;
   }
   return `<section class="rel-pane" data-pane="${esc(n.key)}"${extra} hidden>${body}<p class="rp-hint">${esc(t("Click it again or press Esc to see everything"))}</p></section>`;
 }
@@ -991,8 +1040,8 @@ function relDefaultPane(ctx: Ctx, v: View, all: AllStatus, g: RelationGraph): st
     ...bad.map(({ a, c }) => paneRow(c.key, `${mark(c.state, `${agentName(ctx, a)} · ${word(ctx, v, c.kind)}`)}`, `<span class="rp-row-r">${esc(word(ctx, v, c.state))}</span>`, cellAi(ctx, v, a.env, a.id, c.kind, true))),
     ...stale.map((e) => paneRow(e.key, mark("none", e.label), `<span class="rp-row-r">${esc(envReport(ctx, all, e)[0])}</span>`)),
   ];
-  const head = rows.length ? `<h3>${esc(t("Chains with problems"))}</h3>` : `<h3>${mark("synced", t("No problems"))}</h3>`;
-  return `<section class="rel-pane" data-pane="">${head}${rows.length ? `<ul class="rp-rows">${rows.join("")}</ul>` : ""}<p class="rp-hint">${esc(t("Click a node or a cell to see only its chains"))}</p></section>`;
+  const head = rows.length ? `<h3>${esc(t("Where the problems are"))}</h3>` : `<h3>${mark("synced", t("No problems"))}</h3>`;
+  return `<section class="rel-pane" data-pane="">${head}${rows.length ? `<ul class="rp-rows">${rows.join("")}</ul>` : ""}<p class="rp-hint">${esc(t("Click any item or cell to see only what it connects to"))}</p></section>`;
 }
 
 /** The bezier from a source to its machine box's header, in px. */
@@ -1035,7 +1084,7 @@ function relGraphHtml(ctx: Ctx, v: View, all: AllStatus, g: RelationGraph, which
   });
   const divider = lay.dividers.map((y) => `<span class="rn-divider" style="left:${box.x + 12}px;width:${box.w - 24}px;top:${y}px"></span>`).join("");
   const idle = lay.idleY !== null ? `<p class="rn-idle" style="left:${sc.x}px;width:${sc.w}px;top:${lay.idleY}px" data-tip="${esc(g.idle.map((s) => `${sourceWord(ctx, s.id)}：${s.path}`).join("\n"))}">${esc(t("Not checked per agent: {list}", { list: listJoin(ctx, g.idle.map((s) => sourceWord(ctx, s.id))) }))}</p>` : "";
-  const noSources = g.hasSources ? "" : `<p class="rn-idle" style="left:${sc.x}px;width:${sc.w}px;top:0">${esc(t("This report does not say where habits come from (older engine)"))}</p>`;
+  const noSources = g.hasSources ? "" : `<p class="rn-idle" style="left:${sc.x}px;width:${sc.w}px;top:0">${esc(t("This report does not say where habits come from (the checking tool on that machine is older)"))}</p>`;
   return `<div class="rel-graph" data-graph="${which}" style="width:${lay.width}px;height:${lay.height}px" role="group" aria-label="${esc(t("Where habits come from and where they go"))}"><svg class="rel-lines" width="${lay.width}" height="${lay.height}" viewBox="0 0 ${lay.width} ${lay.height}" aria-hidden="true">${paths}</svg>${noSources}${idle}${boxes.join("")}${divider}${sources.join("")}</div>`;
 }
 
@@ -1055,7 +1104,7 @@ function relationHtml(ctx: Ctx, v: View, all: AllStatus): string {
         .filter((a) => a.env === e.id)
         .map((a, ai) => {
           const key = `rt-${ei}-${ai}`;
-          return `<li class="rt-agent${relAlert(a) ? " is-alert" : ""}${a.aux ? " is-aux" : ""}"><button type="button" class="rt-name" aria-expanded="false" aria-controls="${key}" data-toggle="${key}"><span class="rt-label">${esc(agentName(ctx, a))}</span><span class="rc-row">${relCells(ctx, v, a, false)}</span></button><div class="rt-detail" id="${key}" hidden><p class="rp-meta"><button type="button" class="linkish" data-goto="${esc(a.id)}" data-goto-env="${esc(a.env)}">${esc(t("See it under By machine"))}</button></p>${agentDetail(ctx, v, g, a, "flat")}</div></li>`;
+          return `<li class="rt-agent${relAlert(a) ? " is-alert" : ""}${a.aux ? " is-aux" : ""}"><button type="button" class="rt-name" aria-expanded="false" aria-controls="${key}" data-toggle="${key}"><span class="rt-label">${esc(agentName(ctx, a))}</span><span class="rc-row">${relCells(ctx, v, a, false)}</span></button><div class="rt-detail" id="${key}" hidden><p class="rp-meta"><button type="button" class="linkish" data-goto="${esc(a.id)}" data-goto-env="${esc(a.env)}">${esc(t("See it under Machines"))}</button></p>${agentDetail(ctx, v, g, a, "flat")}</div></li>`;
         })
         .join("");
       return `<section class="rt-env${relAlert(e) ? " is-alert" : ""}${e.report && e.report.kind !== "report" ? " is-unreported" : ""}"><h3 class="rt-h"><span>${esc(e.label)}</span><span class="rt-sub">${esc(short)}</span></h3>${rows ? `<ul class="rt-agents">${rows}</ul>` : ""}</section>`;
@@ -1073,17 +1122,19 @@ function relationHtml(ctx: Ctx, v: View, all: AllStatus): string {
 function pluginsTab(ctx: Ctx, all: AllStatus): string {
   const { t } = ctx;
   const data = readPluginsView(all.plugins_view);
-  const fact = data.kind === "ok" ? pluginsFact(data.view, FACT_LIMIT) : "";
+  const fact = data.kind === "ok" ? pluginsFact(data.view, FACT_LIMIT, { workdir: ctx.workdir ?? "", manifest: ctx.noManifest ? null : (ctx.manifest ?? ""), ...(ctx.envPrefix ? { command_prefix: ctx.envPrefix } : {}) }) : "";
   const ai = data.kind !== "ok" ? "" : ctx.askBridge
-    ? `<button type="button" class="lt-btn lt-btn-sm" data-ask="${PLUGINS_PRESET}" data-fact="fact-plugins" data-tip="${esc(t("Opens the Local Tools AI task: AI changes which plugins each environment pulls in the manifest, within what each environment allows, and shows you the change first"))}">${esc(t("Let AI adjust it"))}</button>`
-    : `<button type="button" class="lt-btn lt-btn-sm" data-copy-from="fact-plugins" data-tip="${esc(t("Paste it to an AI to work on"))}">${esc(t("Copy adjustment notes"))}</button>`;
-  const html = pluginsHtml({ t, lang: ctx.lang, esc, mark, when: (iso) => whenText(ctx, iso), aiButton: ai }, data);
+    ? `<button type="button" class="lt-btn lt-btn-sm" data-ask="${PLUGINS_PRESET}" data-fact="fact-plugins" data-tip="${esc(t("Hands it to AI: it changes which plugins each environment gets, within what each environment allows, and shows you the change first"))}">${esc(t("Let AI adjust plugins"))}</button>`
+    : `<button type="button" class="lt-btn lt-btn-sm" data-copy-from="fact-plugins" data-copy-lead="${esc(aiLead(ctx.lang, PLUGINS_PRESET, { ...whereOf(ctx), manifest: ctx.manifest }))}" data-ai-copy data-tip="${esc(t("Copies the request and the current plugin setup, written for an AI. Paste it to your AI and say what to change"))}">${esc(t("Copy plugin change request for AI"))}</button>`;
+  const html = pluginsHtml({ t, lang: ctx.lang, esc, mark, when: (iso) => whenText(ctx, iso), aiButton: ai, aiCopy: (what, commands, o) => aiCopyButton(ctx, what, commands, o), aiFix: (problem, fix) => copyButton(ctx, aiFixText(ctx.lang, problem, fix, whereOf(ctx))) }, data);
   return html + (fact ? `<textarea id="fact-plugins" hidden readonly>${esc(fact)}</textarea>` : "");
 }
 
 // ---- the page body ----
 
-const TAB_TITLE: Record<string, string> = { inbox: "To do", machines: "By machine", matrix: "Overview", relation: "Relations", plugins: "Plugins" };
+/** A tab's name stays on one line ("To do 4" must not break in two on a phone): its spaces do not break. */
+const tabName = (text: string) => text.replace(/ /g, "&nbsp;");
+const TAB_TITLE: Record<string, string> = { inbox: "To do", machines: "Machines", matrix: "Overview", relation: "Map", plugins: "Plugins" };
 
 /** Header with the headline, the three tabs, the footer and the glossary drawer, for a status with something in it. */
 export function tabsHtml(ctx: Ctx, all: AllStatus, preview?: string): string {
@@ -1095,13 +1146,13 @@ export function tabsHtml(ctx: Ctx, all: AllStatus, preview?: string): string {
   const v: View = { g: glossary, facts, todos, agents, multiEnv: cards.length > 1 };
   const panels: Record<string, string> = { inbox: inboxHtml(ctx, v, todos, all), machines: machinesHtml(ctx, v, cards, todos), matrix: matrixHtml(ctx, v, groups, counts), relation: relationHtml(ctx, v, all), plugins: pluginsTab(ctx, all) };
   const tabs = Object.keys(panels)
-    .map((id, i) => `<button type="button" class="lt-tab" role="tab" id="tab-${id}" aria-controls="panel-${id}" aria-selected="${i === 0}" tabindex="${i === 0 ? 0 : -1}" data-tab="${id}">${esc(t(TAB_TITLE[id]))}${id === "inbox" && todos.length ? ` <span class="inbox-count num">${todos.length}</span>` : ""}</button>`)
+    .map((id, i) => `<button type="button" class="lt-tab" role="tab" id="tab-${id}" aria-controls="panel-${id}" aria-selected="${i === 0}" tabindex="${i === 0 ? 0 : -1}" data-tab="${id}">${tabName(esc(t(TAB_TITLE[id])))}${id === "inbox" && todos.length ? `&nbsp;<span class="inbox-count num">${todos.length}</span>` : ""}</button>`)
     .join("");
   const body = Object.entries(panels)
     .map(([id, html], i) => `<section class="tabpanel" role="tabpanel" id="panel-${id}" aria-labelledby="tab-${id}"${i === 0 ? "" : " hidden"}>${html}</section>`)
     .join("");
-  const factAreas = todos.map((x, i) => `<textarea id="fact-${i}" hidden readonly>${esc(todoFact(x, FACT_LIMIT))}</textarea>`).join("");
-  const batch = batchPayload(todos, ctx.lang === "zh" ? "要处理的问题" : "Problem to fix", FACT_LIMIT);
+  const factAreas = todos.map((x, i) => `<textarea id="fact-${i}" hidden readonly>${esc(todoFact(x, FACT_LIMIT, factWhere(ctx)))}</textarea>`).join("");
+  const batch = batchPayload(todos, ctx.lang === "zh" ? "要处理的问题" : "Problem to fix", FACT_LIMIT, factWhere(ctx));
   // the batch data goes with the batch button, which shows from two items (headline)
   const batchAreas = batch.facts.length >= 2
     ? `<script type="application/json" id="batch-facts">${JSON.stringify(batch.facts).replace(/</g, "\\u003c")}</script><textarea id="batch-notes" hidden readonly>${esc(batch.facts.map((f) => f.value).join("\n"))}</textarea>`
@@ -1112,25 +1163,30 @@ export function tabsHtml(ctx: Ctx, all: AllStatus, preview?: string): string {
 
 // ---- whole-page states ----
 
+/** What is wrong, what it means for the reader, and what to tell the AI. */
 const FAILURE_HINT: Record<LoadFailure["kind"], string> = {
-  missing: "bin/agent-env does not exist yet. It comes with phase P3; once it is there, refresh this page. To check by hand:",
-  exit: "The command failed. Run it in a terminal to see the full error:",
-  timeout: "The command took too long. Run it in a terminal to see where it stops:",
-  "not-json": "The command did not print JSON. Run it in a terminal and check that it prints only the status:",
-  shape: "The output does not match the status format. Compare it with docs/status-schema.md:",
-  file: "The status file cannot be read. Check the path, or unset the variable to use the CLI:",
+  missing: "The checking tool (bin/agent-env) was not found, so this page cannot check anything. Copy the sentence below to your AI; it finds out why the tool is missing and puts it back.",
+  exit: "The check stopped with an error, so this page has nothing to show. Your machines are not affected. Copy the sentence below to your AI; it runs the check, reads the full error and fixes it.",
+  timeout: "The check took too long and was stopped, so this page has nothing to show. Copy the sentence below to your AI; it runs the check and finds the step that hangs.",
+  "not-json": "The check answered with something this page cannot read, so there is nothing to show. Copy the sentence below to your AI; it runs the check and fixes what it prints.",
+  shape: "The check answered in a format this page does not know, usually because the tool and this page are different versions. Copy the sentence below to your AI; it brings both to the same version.",
+  file: "This page was started with a preview file that cannot be read. Copy the sentence below to your AI; it fixes the file path or switches back to the live check.",
 };
+/** Whether the failure's `fix` is a command the AI should run (else it is a file or a setting to look at). */
+const FAILURE_RUNS: Record<LoadFailure["kind"], boolean> = { missing: true, exit: true, timeout: true, "not-json": true, shape: false, file: false };
+export const STATUS_COMMAND = "bin/agent-env status --json --all";
+const STATUS_ASK = "check the AI setup on every machine, so the Environments panel has a status to show";
 
 export function failureHtml(ctx: Ctx, f: LoadFailure): string {
   const { t } = ctx;
-  const output = f.output.length ? `<h3>${esc(t("Output (first lines)"))}</h3><pre>${esc(f.output.join("\n"))}</pre>` : "";
+  const output = f.output.length ? `<h3>${esc(t("Error text (first lines, for your AI)"))}</h3><pre>${esc(f.output.join("\n"))}</pre>` : "";
   return `<div class="empty error" role="alert" data-failure="${esc(f.kind)}"><p><strong>${esc(t("Could not load the status"))}</strong></p>
-<p><code>${esc(f.command)}</code>: ${esc(f.message)}</p>${output}
-<h3>${esc(t("How to fix"))}</h3><p>${esc(t(FAILURE_HINT[f.kind]))}</p><div class="fix-line"><code>${esc(f.fix)}</code><button type="button" class="lt-btn lt-btn-sm" data-copy="${esc(f.fix)}">${esc(t("Copy"))}</button></div></div>`;
+<p class="fail-detail"><span>${esc(t("Details, for your AI"))}</span><code>${esc(f.command)}</code>: ${esc(f.message)}</p>${output}
+<h3>${esc(t("What to do"))}</h3><p>${esc(t(FAILURE_HINT[f.kind]))}</p><div class="fix-line">${aiCopyButton(ctx, t("find out why the Environments panel cannot load its status, and fix it. The panel says: {message}", { message: `${f.command}: ${f.message}` }), FAILURE_RUNS[f.kind] ? [f.fix] : [], { quiet: false, careful: true })}<code>${esc(f.fix)}</code></div>${noManifestHtml(ctx, "p")}</div>`;
 }
 
 export function emptyHtml(ctx: Ctx): string {
-  return `<div class="empty" role="status"><p><strong>${esc(ctx.t("No environments yet"))}</strong></p><p>${esc(ctx.t("agent-env status returned no environments. Run it on this machine first:"))}</p><div class="fix-line"><code>bin/agent-env status --json --all</code><button type="button" class="lt-btn lt-btn-sm" data-copy="bin/agent-env status --json --all">${esc(ctx.t("Copy"))}</button></div></div>`;
+  return `<div class="empty" role="status"><p><strong>${esc(ctx.t("No environments yet"))}</strong></p><p>${esc(ctx.t("No machine has been checked yet, so there is nothing to show. Copy the sentence below to your AI; it runs the first check on this machine. Then press Refresh."))}</p><div class="fix-line">${aiCopyButton(ctx, ctx.t(STATUS_ASK), [STATUS_COMMAND], { quiet: false })}<code>${STATUS_COMMAND}</code></div></div>`;
 }
 
 /** The body of the page for one load: header line, status sentence, three tabs; or the empty or error state. */
@@ -1416,7 +1472,10 @@ function pageScript(cfg: { base: string; top: string; strings: Record<string, st
     }
     if (el.dataset.refresh !== undefined) return void load();
     if (el.dataset.copy !== undefined) return copy(el.dataset.copy, el);
-    if (el.dataset.copyFrom) return copy((document.getElementById(el.dataset.copyFrom) as HTMLTextAreaElement | null)?.value ?? "", el);
+    if (el.dataset.copyFrom) {
+      const value = (document.getElementById(el.dataset.copyFrom) as HTMLTextAreaElement | null)?.value ?? "";
+      return copy(el.dataset.copyLead ? el.dataset.copyLead + "\n" + value : value, el);
+    }
     if (el.dataset.filter) {
       const table = content.querySelector(".matrix");
       content.querySelectorAll<HTMLElement>("[data-filter]").forEach((b) => b.setAttribute("aria-pressed", String(b === el)));
@@ -1504,7 +1563,7 @@ export function layout(o: { ctx: Ctx; nonce: string; scheme: string; headerBar: 
     loading: t("Loading"),
     refresh: t("Refresh"),
     refreshing: t("Refreshing…"),
-    running: t("Running agent-env status…"),
+    running: t("Checking every machine…"),
     loadFailed: t("Could not load the status"),
     copied: t("Copied"),
     copyFailed: t("Copy failed: select the text and copy it yourself"),

@@ -9,6 +9,9 @@ import { createPanelHandler, type PanelOptions } from "./index.ts";
 
 const NOW = Date.parse("2026-11-09T08:00:00Z");
 const FIX = (name: string) => join(import.meta.dirname, "fixtures", `${name}.json`);
+/** Where the AI is told to work: a made-up folder, so no test depends on where this checkout is. */
+const WORK = { overlay: "/home/example-user/agent-home", run: "/home/example-user/agent-home" };
+const unesc = (x: string) => x.replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&amp;/g, "&");
 const servers: Array<{ close: () => void }> = [];
 after(() => {
   for (const s of servers) s.close();
@@ -27,7 +30,7 @@ async function serve(opts: Omit<PanelOptions, "allowedHosts">) {
   servers.push(server);
   await new Promise<void>((r) => server.listen(0, "127.0.0.1", r));
   const host = `127.0.0.1:${(server.address() as AddressInfo).port}`;
-  handler = createPanelHandler({ allowedHosts: [host], lang: "en", now: () => NOW, ...opts });
+  handler = createPanelHandler({ allowedHosts: [host], lang: "en", now: () => NOW, folders: WORK, ...opts });
   const get = (path: string, o: { method?: string; host?: string; headers?: Record<string, string> } = {}) =>
     new Promise<{ status: number; headers: Record<string, string | string[] | undefined>; body: string }>((resolve, reject) => {
       const port = (server.address() as AddressInfo).port;
@@ -89,7 +92,7 @@ test("normal: everything in order says so in every tab; no buttons to fix anythi
   assert.match(html, /<header class="top"><h1>Environments<\/h1><p class="headline is-ok" role="status" data-count-total="0">.*?Everything is fine<\/span><\/p><div class="top-acts"><button[^>]*data-refresh>Refresh<\/button><\/div><\/header>/s);
   assert.match(html, /<p class="rest-ok">.*?last check today \d\d:\d\d/s);
   assert.match(html, /<footer class="foot"><p class="fresh"[^>]*><span class="fresh-label">Last report:<\/span><span class="" title="Last report [^"]+">mac today(?: \d\d:\d\d)?<\/span><span class="sep" aria-hidden="true">·<\/span><span class="" [^>]*>wsl today(?: \d\d:\d\d)?<\/span><\/p>/);
-  assert.match(html, /data-tab="inbox">To do<\/button>/, "no count on the tab when there is nothing to do");
+  assert.match(html, /data-tab="inbox">To&nbsp;do<\/button>/, "no count on the tab when there is nothing to do");
   assert.doesNotMatch(html, /<article class="todo"|data-ask|data-ask-all|batch-notes/);
   assert.match(html, /Preview data from/);
 });
@@ -119,7 +122,7 @@ test("v5: three tabs, the same five things to do in each with the same title and
   const { fragment } = await serve({ statusFile: FIX5("issues"), now: () => NOW5, ask: { bridge: "postMessage" } });
   const html = await fragment();
   // tabs: shared .lt-tabs, "to do" selected first, a sentence under each
-  assert.match(html, /<nav class="lt-tabs" role="tablist"[^>]*><button type="button" class="lt-tab" role="tab" id="tab-inbox" aria-controls="panel-inbox" aria-selected="true"[^>]*>To do <span class="inbox-count num">5<\/span><\/button><button[^>]*id="tab-machines"[^>]*aria-selected="false"[^>]*>By machine<\/button><button[^>]*id="tab-matrix"[^>]*>Overview<\/button><button[^>]*id="tab-relation"[^>]*>Relations<\/button><button[^>]*id="tab-plugins"[^>]*>Plugins<\/button><span class="view-ink" aria-hidden="true"><\/span><\/nav>/);
+  assert.match(html, /<nav class="lt-tabs" role="tablist"[^>]*><button type="button" class="lt-tab" role="tab" id="tab-inbox" aria-controls="panel-inbox" aria-selected="true"[^>]*>To&nbsp;do&nbsp;<span class="inbox-count num">5<\/span><\/button><button[^>]*id="tab-machines"[^>]*aria-selected="false"[^>]*>Machines<\/button><button[^>]*id="tab-matrix"[^>]*>Overview<\/button><button[^>]*id="tab-relation"[^>]*>Map<\/button><button[^>]*id="tab-plugins"[^>]*>Plugins<\/button><span class="view-ink" aria-hidden="true"><\/span><\/nav>/);
   assert.doesNotMatch(html, /view-lede|class="legend"|<aside/, "no sentence under the tabs, no legend bar, no glossary column");
   assert.match(html, /id="panel-machines" aria-labelledby="tab-machines" hidden>/);
   // the inbox, grouped by actor in order
@@ -156,13 +159,16 @@ test("v5: three tabs, the same five things to do in each with the same title and
   assert.equal([...html.matchAll(/<dialog class="drawer" id="gloss"/g)].length, 1);
   assert.match(html, /<button type="button" class="linkish" data-gloss[^>]*>Glossary<\/button>/);
   assert.match(html, /漂移<span class="raw">drift<\/span><\/dt><dd>和清单期望的不一样，要修<\/dd>/);
-  assert.match(html, /<div class="todo-more" id="in-1" hidden>.*?<p class="raw-line"><span>As named in the CLI<\/span><code>rules · 指路规则 · missing<\/code><\/p><\/div>/s);
+  assert.match(html, /<div class="todo-more" id="in-1" hidden>.*?<p class="raw-line"><span>Internal name, for your AI<\/span><code>rules · 指路规则 · missing<\/code><\/p><\/div>/s);
   // every row: one main button, then "more"; nothing else outside the folded part
   for (const m of inboxPart.matchAll(/<div class="todo-acts">(.*?)<\/div><div class="todo-more"/gs)) assert.equal([...m[1].matchAll(/<button /g)].length, 2, m[1]);
-  assert.deepEqual([...inboxPart.matchAll(/<article class="todo"[^>]*data-actor="(\w+)">.*?<div class="todo-acts"><button [^>]*>([^<]+)</gs)].map((m) => `${m[1]} ${m[2]}`), ["ai Let AI fix it", "user Let AI fix it", "user Let AI fix it", "other_env Copy 2 commands", "notice Let AI read the logs"]);
+  assert.deepEqual([...inboxPart.matchAll(/<article class="todo"[^>]*data-actor="(\w+)">.*?<div class="todo-acts"><button [^>]*>([^<]+)</gs)].map((m) => `${m[1]} ${m[2]}`), ["ai Let AI fix it", "user Let AI fix it", "user Let AI fix it", "other_env Copy for AI", "notice Let AI read the logs"]);
   // steps with copy, the confirm step shows the dry run only
   assert.match(html, /<li class="step is-confirm" id="in-2-s1">.*?look at the dry run, then confirm.*?<code>bin\/agent-env deliver --target vps-helper\/hermes --dry-run<\/code>/s);
-  assert.doesNotMatch(html, /--yes/);
+  // the confirming --yes is never shown as a command; it only travels inside a fix quoted whole for an AI, which
+  // ends with "show me first"
+  assert.doesNotMatch(html.replace(/data-copy="[^"]*"/g, ""), /--yes/);
+  for (const m of html.matchAll(/data-copy="([^"]*--yes[^"]*)"/g)) assert.match(unesc(m[1]), /^Please handle this problem: .*The panel's fix is: .*For any step that changes or uploads something, show me first and wait for my yes\.$/s);
   // what needs you leads with the AI button too; its steps are behind "more", with no "show steps" button of their own
   assert.doesNotMatch(html, /data-confirm=|Show steps/);
   assert.match(inboxPart, /<article class="todo" data-todo="grok-bot\/bot:rules:指路规则" data-actor="user">.*?<div class="todo-acts"><button type="button" class="lt-btn lt-btn-sm" data-ask="fix-drift"[^>]*>Let AI fix it<\/button><button [^>]*aria-controls="in-1" data-toggle="in-1"/s);
@@ -179,7 +185,8 @@ test("v5 AI buttons: one per thing to do, labelled by actor, carrying only that 
   const rel = html.slice(html.indexOf('id="panel-relation"'));
   assert.ok([...rel.matchAll(/data-ask="/g)].length > 0, "the relation pane offers the same AI buttons next to problem cells");
   const fact = JSON.parse(/<textarea id="fact-3" hidden readonly>(.*?)<\/textarea>/s.exec(html)![1].replace(/&quot;/g, '"').replace(/&amp;/g, "&").replace(/&#39;/g, "'").replace(/&lt;/g, "<").replace(/&gt;/g, ">"));
-  assert.deepEqual(Object.keys(fact), ["id", "env", "target", "title_zh", "steps", "ai_task", "ref"]);
+  assert.deepEqual(Object.keys(fact), ["id", "env", "target", "title_zh", "steps", "ai_task", "ref", "workdir"]);
+  assert.equal(fact.workdir, WORK.run, "the AI is told which folder to work in");
   assert.equal(fact.target, "mac/codex");
   assert.doesNotMatch(html, /data-ask-all|batch-facts/, "one AI fix would only repeat its row's button");
 });
@@ -201,7 +208,9 @@ test("v5 batch button: shown from two AI fixes, each carried with its own contex
   const batch = JSON.parse(/<script type="application\/json" id="batch-facts">(.*?)<\/script>/s.exec(html)![1]);
   assert.deepEqual(batch.map((f: { value: string }) => JSON.parse(f.value).id), ["mac/codex:eval:external-send-asks", "mac/codex:eval:external-send-asks-2"]);
   const copy = await (await serve({ statusFile: file, now: () => NOW5 })).fragment();
-  assert.match(copy, /<button type="button" class="lt-btn" data-copy-from="batch-notes" data-batch="2">Copy fix notes \(2\)</);
+  const all = /<button type="button" class="lt-btn" data-copy-from="batch-notes" data-copy-lead="([^"]*)" data-ai-copy data-batch="2"[^>]*>Copy all 2 for AI</.exec(copy);
+  assert.ok(all, "without the portal the batch button copies everything for an AI");
+  assert.match(unesc(all[1]), /^Fix the problems listed below.*\nWork in the folder \/home\/example-user\/agent-home; run every command there\.\nThis is what the Environments panel says:$/s);
   const zh = await (await serve({ statusFile: file, lang: "zh", now: () => NOW5, ask: { bridge: "postMessage" } })).fragment();
   assert.ok(zh.includes("全部让 AI 修复（2）"));
 });
@@ -211,7 +220,7 @@ test("a confirm step speaks of a dry run only when an earlier step is one", asyn
   const article = (id: string) => new RegExp(`<article class="todo" data-todo="${id}[^"]*".*?</article>`, "s").exec(html)![0];
   const local = article("grok-bot/bot");
   assert.match(local, /<li class="step is-confirm"[^>]*>.*?<span class="confirm-note">Run it only after you confirm<\/span>/s);
-  assert.doesNotMatch(local, /dry run/);
+  assert.doesNotMatch(local.slice(local.indexOf('<ol class="steps">')), /dry run/);
   assert.match(article("vps-helper/hermes"), /<span class="confirm-note">look at the dry run, then confirm<\/span>/);
   const zh = await (await serve({ statusFile: FIX5("real"), lang: "zh", now: () => NOW5 })).fragment();
   assert.ok(zh.includes("等你确认后再运行") && zh.includes("先看演练再确认"));
@@ -239,11 +248,32 @@ test("a machine whose single agent is fine says so without a count", async () =>
 });
 
 
-test("v5 without the portal's AI bridge: every AI button becomes a copy of the fix notes", async () => {
+test("v5 without the portal's AI bridge: every AI button copies the problem for an AI, led by the preset's request", async () => {
   const { fragment } = await serve({ statusFile: FIX5("issues"), now: () => NOW5 });
   const html = await fragment();
   assert.doesNotMatch(html, /data-ask/);
-  assert.equal([...html.slice(0, html.indexOf('id="panel-relation"')).matchAll(/data-copy-from="fact-\d+"[^>]*>Copy fix notes</g)].length, 15);
+  const tabs3 = html.slice(0, html.indexOf('id="panel-relation"'));
+  // four of the five things to do hand the AI the problem data; the one on another machine copies a sentence instead
+  const leads = [...tabs3.matchAll(/data-copy-from="fact-\d+" data-copy-lead="([^"]*)" data-ai-copy[^>]*>Copy for AI</g)].map((m) => unesc(m[1]));
+  assert.equal(leads.length, 12);
+  assert.ok(leads.every((l) => l.includes("Work in the folder /home/example-user/agent-home; run every command there.") && l.endsWith("This is what the Environments panel says:")));
+  assert.ok(leads.some((l) => l.startsWith("Fix the problems listed below")) && leads.some((l) => l.startsWith("Find out why the check below")), "the lead is the ai-tasks.json preset's own request");
+  const other = [...tabs3.matchAll(/<article class="todo" data-todo="[^"]+" data-actor="other_env">.*?<div class="todo-acts"><button type="button" class="lt-btn lt-btn-sm" data-copy="([^"]*)" data-ai-copy[^>]*>Copy for AI</gs)].map((m) => unesc(m[1]));
+  assert.equal(other.length, 3);
+  // steps in order, each where its own `who` says; this old report marks the WSL steps as the person's
+  assert.equal(other[0], [
+    "Please handle this problem: WSL 没有上报状态. Do these steps in order, one after the other:",
+    "1. This step is mine: First run the check and look at the result (read-only: nothing committed or pushed). Command: bin/agent-env status",
+    "2. This step is mine: Once you have looked, confirm and run bin/agent-env status --commit --push (commits and pushes the status branch) (show me first and wait for my yes)",
+    "3. On this machine, in the folder /home/example-user/agent-home: 回到这台 Mac 拉取各机器的上报（或点右上角「刷新」）. Run: bin/agent-env status --json --all --fetch",
+    "The quoted text was written by the panel for me: “you” (“你”) in it means me, the person, not you, the AI. At a step that is mine, stop, tell me exactly what to do, and go on when I say it is done.",
+  ].join("\n"));
+  // a step's own button says it copies one step, and which
+  const step = /<li class="step" id="in-\d+-s1">.*?data-copy="([^"]*)" data-ai-copy[^>]*>Copy this step for AI</s.exec(html);
+  assert.ok(step);
+  assert.match(unesc(step[1]), /^Please do step 2 of \d of “[^”]+”; if the earlier steps are not done yet, tell me first instead of doing this one\. /);
+  assert.doesNotMatch(html, />Copy<|Copy command|Copy \d+ commands|Copy fix notes/, "no button copies a bare command");
+  for (const m of html.matchAll(/data-copy="([^"]*)"/g)) assert.doesNotMatch(unesc(m[1]), /^bin\/agent-env/, "a copy button never starts with the raw command");
   assert.doesNotMatch(html, /data-batch=|batch-notes/);
 });
 
@@ -271,7 +301,7 @@ test("a report without issues: one \"update the engine\" thing to do, the same i
   const inbox = html.slice(html.indexOf('id="panel-inbox"'), html.indexOf('id="panel-machines"'));
   assert.ok(inbox.length > 0);
   assert.doesNotMatch(inbox, /mcp sync --target|data-ask="fix-drift"|data-ask-all/);
-  assert.match(html, /data-copy="bin\/agent-env status --json --all --fetch"/, "the only command is the read-only check");
+  assert.match(html, /<code>bin\/agent-env status --json --all --fetch<\/code><button[^>]*data-copy="Please do step 2 of 2 of [^"]*\. On this machine, in the folder \/home\/example-user\/agent-home: Check that the new report has a to-do list\. Run: bin\/agent-env status --json --all --fetch\."/, "the only command is the read-only check, copied as a sentence for an AI");
   assert.doesNotMatch(html, /status --commit|--push|--env /, "nothing sends the user to another machine or writes a status branch");
   assert.match(html, /Drift<span class="raw">drift<\/span><\/dt>/, "the panel's glossary when the report has none");
   const zh = await (await serve({ statusFile: FIX("drift"), lang: "zh" })).fragment();
@@ -297,8 +327,9 @@ test("CLI missing: readable error, how to fix, no blank page", async () => {
   assert.match(html, /data-failure="missing"/);
   assert.match(html, /Could not load the status/);
   assert.match(html, /does not exist/);
-  assert.match(html, /How to fix/);
-  assert.match(html, /comes with phase P3/);
+  assert.match(html, /What to do/);
+  assert.match(html, /The checking tool \(bin\/agent-env\) was not found, so this page cannot check anything\. Copy the sentence below to your AI/, "what is wrong, what it means, what to tell the AI");
+  assert.match(html, /data-copy="Please find out why the Environments panel cannot load its status, and fix it\. The panel says: [^"]*does not exist \(in the folder \/home\/example-user\/agent-home, run [^"]*status --json --all\)\. For any step that changes or uploads something, show me first and wait for my yes\." data-ai-copy[^>]*>Copy for AI</);
   assert.equal((await get("/api/status")).status, 502);
 });
 
@@ -343,8 +374,8 @@ test("timeoutMs is configurable: a CLI slower than it shows the timeout panel", 
 test("Chinese strings", async () => {
   const { fragment } = await serve({ statusFile: FIX5("issues"), lang: "zh", now: () => NOW5, ask: { bridge: "postMessage" } });
   const html = await fragment();
-  for (const s of ["环境", "vps-helper 今天", "5 件事要处理", "AI 能修<span class=\"num\"> · 1", "待办", "按机器", "总览", "让 AI 修复", "让 AI 准备", "让 AI 查日志", "先看演练再确认", "待办 <span class=\"inbox-count num\">5</span>", "上次上报：", "复制 2 条命令", "术语说明", "命令行里的原始叫法", "谁来处理", "有问题 5", "其余 6 个正常", "还没上报过"]) assert.ok(html.includes(s), s);
-  for (const s of ["全部让 AI 修复（1）", "去确认", "件待办：", "现在要做什么", "这些词是什么意思", "看步骤和命令", "看步骤", "共 5 件待办"]) assert.ok(!html.includes(s), `gone in v6: ${s}`);
+  for (const s of ["环境", "vps-helper 今天", "5 件事要处理", "AI 能修<span class=\"num\"> · 1", "待办", "按机器", "总览", "让 AI 修复", "让 AI 准备", "让 AI 查日志", "先看演练再确认", "待办&nbsp;<span class=\"inbox-count num\">5</span>", "上次上报：", "复制给 AI", "术语说明", "内部名称（给 AI 看）", "谁来处理", "有问题 5", "其余 6 个正常", "还没上报过"]) assert.ok(html.includes(s), s);
+  for (const s of ["全部让 AI 修复（1）", "去确认", "件待办：", "现在要做什么", "这些词是什么意思", "看步骤和命令", "看步骤", "共 5 件待办", "复制 2 条命令", "复制命令", "命令行里的原始叫法"]) assert.ok(!html.replace(/data-copy="[^"]*"/g, "").includes(s), `gone in v6: ${s}`);
   const ok = await serve({ statusFile: FIX5("ok"), lang: "zh", now: () => NOW5 });
   assert.match(await ok.fragment(), /一切正常/);
 });
@@ -424,7 +455,7 @@ test("finding 15: a cloud-hosted report is called live only when this run checke
   const bot = data.environments.find((e: { env: string }) => e.env === "grok-bot");
   assert.deepEqual([bot.source, bot.checked_from], ["live", "mac"]);
   const live = machineCard(await (await serve({ statusFile: tmpStatus(data), lang: "zh", now: () => NOW })).fragment(), "grok-bot");
-  assert.match(live, /<span>云端托管，在 mac 上实时体检<\/span>/);
+  assert.match(live, /<span>云端托管，在 mac 上实时检查<\/span>/);
   bot.source = "branch"; // the reviewer's input: read from a status branch, checked from the Mac some time ago
   const past = machineCard(await (await serve({ statusFile: tmpStatus(data), lang: "zh", now: () => NOW })).fragment(), "grok-bot");
   assert.match(past, /<span>云端托管，mac 上次上报的结果<\/span>/);
@@ -518,10 +549,10 @@ test("AI first: a host upgrade is AI's to fix; what needs you leads with the AI 
   assert.match(pointer.steps[0].text_zh, /^把插件生成到最新/, "the plugin records its repository: no precondition step");
   // the steps stay one click away, in the row's folded part
   assert.match(inbox, /<div class="todo-more" id="in-\d+" hidden><ol class="steps"><li class="step" id="in-\d+-s0">/);
-  // without the portal's AI bridge the same rows lead with "copy fix notes"
+  // without the portal's AI bridge the same rows lead with "copy for AI"
   const plain = await (await serve({ statusFile: FIX("v8-ai-fix"), lang: "zh", now: () => NOW5 })).fragment();
   const plainInbox = plain.slice(plain.indexOf('id="panel-inbox"'), plain.indexOf('id="panel-machines"'));
-  assert.equal([...plainInbox.matchAll(/<div class="todo-acts"><button type="button" class="lt-btn lt-btn-sm" data-copy-from="fact-\d+"[^>]*>复制修复说明</g)].length, 5);
+  assert.equal([...plainInbox.matchAll(/<div class="todo-acts"><button type="button" class="lt-btn lt-btn-sm" data-copy-from="fact-\d+"[^>]*>复制给 AI</g)].length, 5);
 });
 
 test("one column for every view: no view widens the page, so the title, tabs, view bar and footer never move", async () => {
@@ -532,4 +563,61 @@ test("one column for every view: no view widens the page, so the title, tabs, vi
   // the graph and its pane fit the column: 672 + 32 + at least 400 = 1104 = 1152 - 2 × 24, the width the pane drops below at
   assert.match(CSS, /\.rel-body \{ display: grid; grid-template-columns: 672px minmax\(400px, 1fr\); gap: 32px;/);
   assert.match(CSS, /@media \(max-width: 1151px\) \{\s*\.rel-body \{ grid-template-columns: 672px; \}/);
+});
+
+test("copy for AI on the page: steps on the right machine, writes ask first, a several-command fix stays whole", async () => {
+  const copies = (html: string) => [...html.matchAll(/data-copy="([^"]*)" data-ai-copy/g)].map((m) => unesc(m[1]));
+  const zh = await (await serve({ statusFile: FIX("v8-plugins"), lang: "zh" })).fragment();
+  // the row about another machine: its steps there, the last one back here, and the step that reports is in it
+  const wsl = copies(zh).find((c) => c.startsWith("帮我处理这个问题：WSL 还没上报状态。按下面的顺序做"));
+  assert.ok(wsl);
+  const lines = wsl.split("\n");
+  assert.match(lines[1], /^1\. 在 wsl 这台机器上：.*运行：bin\/agent-env status$/);
+  assert.match(lines[2], /^2\. 在 wsl 这台机器上：.*bin\/agent-env status --commit --push.*（先给我看，等我同意再做）$/);
+  assert.equal(lines[3], "3. 在本机的 /home/example-user/agent-home 目录里：回到本机拉取最新状态。运行：bin/agent-env status --json --all --fetch");
+  assert.doesNotMatch(wsl, /wsl 这台机器上[^\n]*--fetch/, "the fetch is not sent to the other machine");
+  // the relation pane: a fix that names two commands gets one button with the whole fix, never one per command
+  const rel = zh.slice(zh.indexOf('id="panel-relation"'), zh.indexOf('id="panel-plugins"'));
+  const pointer = copies(rel).filter((c) => c.includes("plugin pointer --target grok-bot/bot"));
+  assert.ok(pointer.length > 0);
+  for (const c of pointer) {
+    assert.match(c, /面板给的做法是：bin\/agent-env plugin pointer --target grok-bot\/bot 输出指路规则，由你在该 app 里存进它的 memory 并确认后，运行 bin\/agent-env plugin pointer --target grok-bot\/bot --record。/);
+    assert.match(c, /其中的「你」指我本人，不是你这个 AI。会改动或上传东西的步骤，先给我看，等我同意再做。$/);
+  }
+  // every sentence with a command that is not read-only asks to be shown first
+  for (const name of ["drift", "v5-issues", "v7-relations", "v8-ai-fix", "v8-plugins"]) {
+    const html = await (await serve({ statusFile: FIX(name), lang: "zh" })).fragment();
+    for (const c of copies(html)) {
+      const writes = /bin\/agent-env (render [^）\n]*--write|mcp (--fix|sync)|plugin (publish|build|pointer)|status [^）\n]*--(commit|push))/.test(c);
+      if (writes) assert.match(c, /先给我看|等我同意/, c);
+    }
+  }
+  const drift = copies(await (await serve({ statusFile: FIX("drift"), lang: "zh" })).fragment());
+  assert.ok(drift.some((c) => /运行 bin\/agent-env render --target mac\/codex --write）。会改动或上传东西的步骤，先给我看，等我同意再做。$/.test(c)));
+});
+
+test("no personal manifest found: the engine's folder is not called yours; the page, the sentences and the facts say so", async () => {
+  const none = { overlay: "", run: "/home/example-user/agent-env", manifest: "", found: false, env: "" };
+  const html = await (await serve({ statusFile: FIX("v8-plugins"), lang: "zh", folders: none })).fragment();
+  assert.match(html, /<span class="no-manifest" data-no-manifest>没找到你的个人清单（manifest\/habits\.toml），页面不知道哪个文件夹是你的。[^<]*<button[^>]*data-copy="帮我找到我放 agent-env 个人清单（manifest\/habits\.toml）的文件夹，告诉我它在哪。[^"]*先不要改任何东西。" data-ai-copy/);
+  const note = "注意：面板没找到我的个人清单（manifest/habits.toml），/home/example-user/agent-env 只是 agent-env 工具自己的目录。";
+  const withCommand = [...html.matchAll(/data-copy="([^"]*)" data-ai-copy/g)].map((m) => unesc(m[1])).filter((c) => c.includes("本机的 /home/example-user/agent-env 目录里") || c.includes("在 /home/example-user/agent-env 目录里运行"));
+  assert.ok(withCommand.length > 5);
+  for (const c of withCommand) assert.ok(c.includes(note), c);
+  for (const m of html.matchAll(/data-copy-lead="([^"]*)"/g)) assert.ok(unesc(m[1]).includes(note));
+  assert.equal(JSON.parse(unesc(/<textarea id="fact-0" hidden readonly>(.*?)<\/textarea>/s.exec(html)![1])).manifest, null);
+  assert.equal(JSON.parse(unesc(/<textarea id="fact-plugins" hidden readonly>(.*?)<\/textarea>/s.exec(html)![1])).manifest, null);
+  // the failure page says it too
+  const failed = await (await serve({ command: ["/nonexistent/agent-env", "status"], lang: "en", folders: none })).fragment();
+  assert.match(failed, /<p class="no-manifest" data-no-manifest>No personal manifest \(manifest\/habits\.toml\) was found/);
+  // found: nothing of this shows
+  assert.doesNotMatch(await (await serve({ statusFile: FIX("v8-plugins"), lang: "zh" })).fragment(), /no-manifest|没找到我的个人清单/);
+  // the manifest named by AGENT_ENV_MANIFEST: commands on this machine carry the variable, facts name it
+  const named = { overlay: "/home/example-user/mine", run: "/home/example-user/agent-env", manifest: "/home/example-user/mine/h.toml", found: true, env: "AGENT_ENV_MANIFEST=/home/example-user/mine/h.toml" };
+  const withEnv = await (await serve({ statusFile: FIX("v8-plugins"), lang: "zh", folders: named })).fragment();
+  assert.match(withEnv, /data-copy="帮我重新查一下各个仓库是公开还是私有（在 \/home\/example-user\/agent-env 目录里运行 AGENT_ENV_MANIFEST=\/home\/example-user\/mine\/h\.toml bin\/agent-env plugin repos --refresh）。"/);
+  const fact = JSON.parse(unesc(/<textarea id="fact-0" hidden readonly>(.*?)<\/textarea>/s.exec(withEnv)![1]));
+  assert.equal(fact.command_prefix, "AGENT_ENV_MANIFEST=/home/example-user/mine/h.toml");
+  assert.doesNotMatch(String(fact.env), /AGENT_ENV_MANIFEST/, "the fact's own env (the environment's name) is untouched");
+  assert.equal(JSON.parse(unesc(/<textarea id="fact-plugins" hidden readonly>(.*?)<\/textarea>/s.exec(withEnv)![1])).manifest, "/home/example-user/mine/h.toml");
 });

@@ -8,7 +8,7 @@ import { homedir } from "node:os";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { type Lang, translator } from "./i18n.ts";
 import { contentHtml, type Ctx, fragmentPage, layout } from "./page.ts";
-import { loadStatus, type LoadResult } from "./source.ts";
+import { loadStatus, type LoadResult, workFolders, type WorkFolders } from "./source.ts";
 
 interface PanelTheme {
   colorScheme?: "auto" | "light" | "dark";
@@ -36,6 +36,10 @@ export interface PanelOptions {
   statusFile?: string;
   /** Home folder to hide from pages (default $HOME). */
   home?: string;
+  /** Where an AI works for this panel: the folder commands run in and the one that holds manifest/habits.toml
+   *  (default: found from where the panel is installed, see source.ts workFolders). `manifest`, `found` and `env`
+   *  default to a manifest found at <overlay>/manifest/habits.toml. */
+  folders?: Pick<WorkFolders, "run" | "overlay"> & Partial<WorkFolders>;
   /** Clock for the stale check (tests). */
   now?: () => number;
 }
@@ -59,6 +63,9 @@ export function createPanelHandler(options: PanelOptions) {
   const home = options.home ?? process.env.HOME ?? homedir();
   const now = options.now ?? Date.now;
   const statusFile = options.statusFile ?? process.env.AGENT_ENV_STATUS_FILE;
+  let folders: WorkFolders | undefined = options.folders
+    ? { manifest: options.folders.overlay ? `${options.folders.overlay}/manifest/habits.toml` : "", found: !!options.folders.overlay, env: "", ...options.folders }
+    : undefined;
   const hide = (s: string) => (home && home !== "/" ? s.split(home + "/").join("~/") : s);
 
   const send = (res: ServerResponse, status: number, type: string, body: string, extra: Record<string, string> = {}, head = false) => {
@@ -89,6 +96,21 @@ export function createPanelHandler(options: PanelOptions) {
     return loadStatus({ command: options.command, statusFile, env, timeoutMs: options.timeoutMs });
   }
 
+  /** Found once, with the login shell's environment (AGENT_ENV_MANIFEST may name the manifest). */
+  function workIn(): WorkFolders {
+    if (!folders) {
+      let env: NodeJS.ProcessEnv = process.env;
+      try {
+        const rt = options.runtime?.();
+        if (rt?.env) env = { ...process.env, ...rt.env };
+      } catch {
+        // keep the process environment
+      }
+      folders = workFolders({ env });
+    }
+    return folders;
+  }
+
   return async function handle(req: IncomingMessage, res: ServerResponse): Promise<boolean> {
     const raw = req.url || "/";
     if (base && !(raw === base || raw.startsWith(base + "/") || raw.startsWith(base + "?"))) return false;
@@ -110,7 +132,8 @@ export function createPanelHandler(options: PanelOptions) {
       return true;
     }
     const l = pickLang(req);
-    const ctx: Ctx = { t: translator(l), lang: l, base, askBridge, now: now(), headerBar };
+    const w = workIn();
+    const ctx: Ctx = { t: translator(l), lang: l, base, askBridge, now: now(), headerBar, workdir: w.run, manifest: w.manifest, noManifest: !w.found, envPrefix: w.env };
     const qs = url.searchParams.get("scheme");
     const schemeNow = qs && ["auto", "light", "dark"].includes(qs) ? qs : scheme;
     const htmlHeaders = (nonce?: string) => ({

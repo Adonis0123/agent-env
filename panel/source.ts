@@ -2,13 +2,70 @@
 // previews only, the JSON file named by AGENT_ENV_STATUS_FILE. Never throws: a failure comes back as a LoadFailure
 // with the stderr head and a next step, so the page can show it instead of going blank.
 import { execFile } from "node:child_process";
+import { statSync } from "node:fs";
 import { readFile } from "node:fs/promises";
-import { resolve } from "node:path";
+import { dirname, join, resolve, sep } from "node:path";
 import { type AllStatus, parseAllStatus, StatusShapeError } from "./model.ts";
 
 export const REPO_ROOT = resolve(import.meta.dirname, "..");
 export const DEFAULT_COMMAND = [resolve(REPO_ROOT, "bin", "agent-env"), "status", "--json", "--all"];
 const STDERR_LINES = 8;
+
+/** Where an AI works for this panel, found the way the engine finds its manifest (engine/agent_env.py manifest_arg,
+ *  engine/overlay.py overlay_root): $AGENT_ENV_MANIFEST when set, as any path (a relative one from the engine's root,
+ *  where the panel runs the CLI); else manifest/habits.toml in the engine's root or at most three folders up.
+ *  No path is written in this file. */
+export interface WorkFolders {
+  /** the folder `bin/agent-env` commands run in: the personal folder when it has its own bin/agent-env, else the
+   *  engine's root */
+  run: string;
+  /** the personal folder, the one that holds the manifest; "" when no manifest was found */
+  overlay: string;
+  /** the manifest file the engine reads; "" when none was found */
+  manifest: string;
+  /** a manifest file exists. False: the engine's root is not anyone's personal folder, and the page says so */
+  found: boolean;
+  /** `AGENT_ENV_MANIFEST=<path>` when a command run in `run` would not find the manifest by itself, else "" */
+  env: string;
+}
+const MANIFEST = join("manifest", "habits.toml");
+const OVERLAY_MAX_UP = 3;
+const isFile = (path: string) => {
+  try {
+    return statSync(path).isFile();
+  } catch {
+    return false;
+  }
+};
+const shellWord = (s: string) => (/^[\w@%+=:,./~-]+$/.test(s) ? s : `'${s.replace(/'/g, `'\\''`)}'`);
+
+export function workFolders(o: { start?: string; env?: NodeJS.ProcessEnv; exists?: (path: string) => boolean } = {}): WorkFolders {
+  const start = resolve(o.start ?? REPO_ROOT);
+  const exists = o.exists ?? isFile;
+  // overlay.py overlay_root: the engine's root, then its parents, MAX_UP levels at most
+  let up = "";
+  for (let d = start, i = 0; i <= OVERLAY_MAX_UP; i++, d = dirname(d)) {
+    if (exists(join(d, MANIFEST))) {
+      up = d;
+      break;
+    }
+    if (dirname(d) === d) break;
+  }
+  const own = (dir: string) => dir !== start && exists(join(dir, "bin", "agent-env"));
+  const named = o.env?.AGENT_ENV_MANIFEST;
+  if (named) {
+    const manifest = resolve(start, named);
+    if (!exists(manifest)) return { run: start, overlay: "", manifest: "", found: false, env: "" };
+    const standard = manifest.endsWith(join(sep, MANIFEST));
+    const overlay = standard ? dirname(dirname(manifest)) : dirname(manifest);
+    // the same file the engine finds by walking up: nothing to carry
+    if (up && join(up, MANIFEST) === manifest) return { run: own(up) ? up : start, overlay: up, manifest, found: true, env: "" };
+    if (standard && own(overlay)) return { run: overlay, overlay, manifest, found: true, env: "" };
+    return { run: start, overlay, manifest, found: true, env: `AGENT_ENV_MANIFEST=${shellWord(manifest)}` };
+  }
+  if (!up) return { run: start, overlay: "", manifest: "", found: false, env: "" };
+  return { run: own(up) ? up : start, overlay: up, manifest: join(up, MANIFEST), found: true, env: "" };
+}
 /** `agent-env status` runs its probes in parallel; the slowest one, `sideby doctor`, is capped at 120 s. Leave headroom above that. */
 export const DEFAULT_TIMEOUT_MS = 180_000;
 
