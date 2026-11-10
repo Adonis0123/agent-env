@@ -106,6 +106,7 @@ what hosts learned) is `skills/agent-env/SKILL.md`; install it as a skill in the
 | `skills/agent-env/` | the runbook skill |
 | `profiles/_template/` | the template for a new environment's profile |
 | `examples/demo/` | the demo personal layer used by the quick start and the tests |
+| [`ARCHITECTURE.md`](ARCHITECTURE.md) | how the engine is built: concepts, data flow, module map, privacy, extension points |
 | `docs/` | the design (`plugins-design.md`), the status JSON contract, decisions (`adr/`) |
 
 ## Development
