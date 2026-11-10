@@ -15,12 +15,29 @@ All notable changes to this project are listed here. Versions follow [Semantic V
 - `plugin vendor-diff --plugin <p> --skill <s>`: compare a vendored skill's local copy with upstream HEAD (network),
   print the diff, and with `--write-license` save the upstream license. Updating stays manual: merge upstream into
   the local copy, then rebuild.
+- `profiles/_template/starter/`: a first personal layer (one machine, one agent host) with a `bin/agent-env`
+  wrapper that runs the engine cloned into `vendor/agent-env/`.
+- Panel: every copy button copies a plain sentence for an AI agent ("Copy for AI") instead of a command: what to
+  do, on which machine and in which folder, the command, and a request to show writes first. Multi-step items are
+  numbered, and each step has its own "Copy this step for AI".
 
 ### Changed
 
 - The pointer rule now tells a cloud-hosted bot how to get third-party skills: run `npx -y skills experimental_install`
   in a plugin that has `skills-lock.json` and read `.agents/skills/`, or fetch each skill from its `sourceUrl` and
   `skillPath` with git. The default pointer limit is 400 characters (was 300).
+- README opens with who it is for, the public plugin for one machine and one agent, and a paragraph to paste to
+  an AI agent ("Send this to your AI"); it lists what the user does themselves, and "Use it for your setup" has
+  exact commands. `skills/agent-env/SKILL.md` starts with a "what the user says → what the agent does" table.
+- `doctor`, `status` and `eval` fail (exit 1) when `--env` names an environment that is neither declared in
+  `[environments]` nor used by a target, and list the names that are.
+- Error messages for a missing manifest, unset `[sources] docs` / `hooks`, an old Python, no environment matching
+  this machine and a changed host version say what to do next.
+- Panel: failure, empty and unknown states say what is wrong, what it means and what to tell the AI; jargon is
+  removed from zh and en strings; the English tabs are Machines and Map and fit one row at 390px.
+- Panel: `ai-tasks.json` no longer names a personal folder (`cwd` is `"engine"`). The panel finds the folder
+  that holds `manifest/habits.toml` the way the engine does, including `AGENT_ENV_MANIFEST`, puts it in every AI
+  fact and sentence as `workdir`, and says so when there is none.
 
 ### Fixed
 
