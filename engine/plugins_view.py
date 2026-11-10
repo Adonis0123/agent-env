@@ -4,8 +4,11 @@ or private, how far each plugin is built and published, and which plugins each e
 Everything in `view` comes from the manifest, repos.json and this machine's state, so `status` stays as fast
 offline as online. Whether a repository is public is the one fact that needs the network: `refresh` asks the
 host (gh for github.com; any other host with the command the manifest declares in [git_hosts."<host>"]) and
-writes a cache; `view` only reads that cache. A repository that
-was never asked about, or whose host could not be reached, is `unknown` and carries how to fix it.
+writes a cache; `view` only reads that cache. Two steps keep the cache from going stale between refreshes:
+`check_due` (run by `status --all`, the panel's data step, before `view`) re-asks only the repositories the
+cache lacks or last answered over STALE_AFTER ago, within a few seconds; and `mark_pushed` (run by publish
+after a push) records that the repository is no longer empty. A repository that was never asked about, or
+whose host could not be reached, is `unknown` and carries how to fix it.
 
 Only repositories of the plugin system are looked at: the ones [sources] point into, this repository, and the
 plugin repositories ([plugins.<name>].repo, or [plugin_repos].<visibility> while no plugin of that visibility
@@ -16,7 +19,7 @@ import json
 import os
 import re
 import subprocess
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import overlay
@@ -32,6 +35,11 @@ ORDER = ("public", "personal", "company", plugins.LOCAL)              # the colu
 PUSHED = tuple(v for v in ORDER if v != plugins.LOCAL)                # visibilities that have a repository
 PUBLIC, PRIVATE, UNKNOWN = "public", "private", "unknown"
 PROBE_TIMEOUT = 20
+# `status --all` re-asks a repository whose cached answer is older than this. A day: visibility rarely changes,
+# and one status a day paying a few seconds online is cheap; a refresh by hand still asks everything at once.
+STALE_AFTER = timedelta(hours=24)
+# the most `status --all` waits for those re-asks (also each probe's timeout); past it the panel shows the cache
+DUE_BUDGET = 4
 LOCAL_TRANSPORT = "local"
 # docs/plugins-design.md "Migration stages": the stage that moves an environment without plugins onto them
 LEGACY_PHASE = {plugins.REMOTE_EXEC: 3, LOCAL_TRANSPORT: 4}
@@ -74,6 +82,92 @@ def read_cache() -> dict:
         return {}
     repos = data.get("repos") if isinstance(data, dict) else None
     return {k: v for k, v in repos.items() if isinstance(v, dict)} if isinstance(repos, dict) else {}
+
+
+def _write_cache(repos: dict, stamp) -> None:
+    render.atomic_write(cache_path(), json.dumps({"schema": 1, "checked_at": stamp, "repos": repos},
+                                                 ensure_ascii=False, indent=2, sort_keys=True) + "\n")
+
+
+def _merge_cache(updates: dict) -> None:
+    """Write `updates` ({key: record}) over the cache, keeping every other entry and when it was last refreshed."""
+    try:
+        data = json.loads(cache_path().read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        data = {}
+    stamp = data.get("checked_at") if isinstance(data, dict) and isinstance(data.get("checked_at"), str) else None
+    _write_cache(dict(read_cache(), **updates), stamp)
+
+
+def _stamp(now=None) -> str:
+    return now or datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def _parse_stamp(s):
+    try:
+        return datetime.strptime(s, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)
+    except (TypeError, ValueError):
+        return None
+
+
+def mark_pushed(url, seen=None, now=None) -> None:
+    """After publish pushed to `url` (or found its content already there): the repository is not empty any more.
+    `seen` is what the host said just before the push; without a usable answer, only the cached entry's `empty`
+    flips. Never raises: a cache that cannot be written is fixed by the next refresh."""
+    try:
+        key = repo_key(url)
+        if not key:
+            return
+        seen = seen if isinstance(seen, dict) else {}
+        if seen.get("visibility") in (PUBLIC, PRIVATE):
+            rec = {"visibility": seen["visibility"], "empty": False, "via": seen.get("via"), "error": None,
+                   "fix": None, "checked_at": _stamp(now)}
+        else:
+            prev = read_cache().get(key)
+            if not isinstance(prev, dict) or prev.get("visibility") not in (PUBLIC, PRIVATE) or prev.get("empty") is False:
+                return
+            rec = dict(prev, empty=False)
+        _merge_cache({key: rec})
+    except Exception:
+        return
+
+
+def due(keys, cache: dict, now=None) -> list:
+    """The keys `check_due` re-asks: not in the cache, without a public/private answer, or answered too long ago."""
+    at = _parse_stamp(_stamp(now))
+    out = []
+    for k in keys:
+        rec = cache.get(k) if isinstance(cache.get(k), dict) else {}
+        checked = _parse_stamp(rec.get("checked_at"))
+        if rec.get("visibility") not in (PUBLIC, PRIVATE) or checked is None or at - checked > STALE_AFTER:
+            out.append(k)
+    return out
+
+
+def check_due(manifest: dict, manifest_path, repos_file=None, run=subprocess.run, now=None, budget=DUE_BUDGET) -> list:
+    """Re-ask only the due repositories (see `due`), all at once, waiting at most `budget` seconds. Answers are
+    merged into the cache; a repository that could not be asked keeps its cached entry (or stays `unknown`), and
+    a refresh by hand still says why. Never raises. The keys that got an answer."""
+    try:
+        keys = due(layout(manifest, manifest_path, repos_file)["keys"], read_cache(), now)
+        if not keys:
+            return []
+        hosts = git_hosts(manifest)
+        pool = concurrent.futures.ThreadPoolExecutor(max_workers=6)
+        futures = {pool.submit(probe, k, run, hosts, budget): k for k in keys}
+        done, _ = concurrent.futures.wait(futures, timeout=budget + 1)
+        pool.shutdown(wait=False, cancel_futures=True)
+        stamp = _stamp(now)
+        found = {}
+        for f in done:
+            res = f.result() if not f.exception() else None
+            if isinstance(res, dict) and res.get("visibility") in (PUBLIC, PRIVATE):
+                found[futures[f]] = dict(res, checked_at=stamp)
+        if found:
+            _merge_cache(found)
+        return sorted(found)
+    except Exception:
+        return []
 
 
 def _tilde(path) -> str:
@@ -208,7 +302,7 @@ def git_hosts(manifest: dict) -> dict:
     return {h: s for h, s in table.items() if git_host_errors(h, s) == []}
 
 
-def probe(key: str, run=subprocess.run, hosts=None) -> dict:
+def probe(key: str, run=subprocess.run, hosts=None, timeout=PROBE_TIMEOUT) -> dict:
     """Ask the host whether one repository is public. Never raises: what went wrong comes back as `unknown`
     with the fix. Private also covers GitHub's internal and any other level that is not public. github.com is
     asked with gh; another host only when `hosts` (git_hosts(manifest)) says how."""
@@ -226,11 +320,11 @@ def probe(key: str, run=subprocess.run, hosts=None) -> dict:
         return _unknown(f"不会查 {host} 上的仓库（只会查 {known}）",
                         f"在清单写 [git_hosts.\"{host}\"]（command、visibility），或到这个仓库的设置页自己确认是公开还是私有")
     try:
-        p = run(cmd, capture_output=True, text=True, timeout=PROBE_TIMEOUT)
+        p = run(cmd, capture_output=True, text=True, timeout=timeout)
     except FileNotFoundError:
         return _unknown(f"这台机器没装 {cmd[0]} 命令", f"装好 {cmd[0]} 并登录（{login}），{again}")
     except subprocess.TimeoutExpired:
-        return _unknown(f"{cmd[0]} {PROBE_TIMEOUT} 秒没有返回", f"检查网络，{again}")
+        return _unknown(f"{cmd[0]} {timeout} 秒没有返回", f"检查网络，{again}")
     except OSError as exc:
         return _unknown(f"{cmd[0]} 跑不起来（{type(exc).__name__}）", f"确认 {cmd[0]} 能运行，{again}")
     out = p.stdout or ""
@@ -269,7 +363,7 @@ def refresh(manifest: dict, manifest_path, out, repos_file=None, run=subprocess.
     with concurrent.futures.ThreadPoolExecutor(max_workers=6) as pool:
         hosts = git_hosts(manifest)
         results = list(pool.map(lambda k: probe(k, run, hosts), keys))
-    stamp = now or datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    stamp = _stamp(now)
     repos, failed = {}, 0
     for key, res in zip(keys, results):
         if res["visibility"] != UNKNOWN:
@@ -285,8 +379,7 @@ def refresh(manifest: dict, manifest_path, out, repos_file=None, run=subprocess.
         else:
             repos[key] = dict(res, checked_at=stamp)
             out.write(f"未知  {key}：{res['error']}。修复：{res['fix']}\n")
-    render.atomic_write(cache_path(), json.dumps({"schema": 1, "checked_at": stamp, "repos": repos},
-                                                 ensure_ascii=False, indent=2, sort_keys=True) + "\n")
+    _write_cache(repos, stamp)
     out.write(f"已写入 {_tilde(cache_path())}（{len(keys)} 个仓库，{failed} 个没查到）\n")
     return 1 if failed else 0
 

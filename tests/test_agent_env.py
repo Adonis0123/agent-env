@@ -572,6 +572,14 @@ class StatusTests(Base):
         self.assertEqual(code, 0)
         self.assertEqual(validate_all_status(json.loads(out.getvalue())), [])
 
+    def test_status_all_rechecks_due_repos_first_and_plain_status_does_not(self):
+        args = ["--manifest", str(self.manifest), "--env", "test", "--repo", str(self.repo)]
+        with mock.patch.object(agent_env.plugins_view, "check_due", return_value=[]) as due:
+            agent_env.main(["status", "--json", *args], out=io.StringIO(), err=io.StringIO())
+            due.assert_not_called()
+            self.assertEqual(agent_env.main(["status", "--json", "--all", *args], out=io.StringIO(), err=io.StringIO()), 0)
+            due.assert_called_once()
+
     def test_push_requires_commit(self):
         err = io.StringIO()
         code = agent_env.main(["status", "--push", "--manifest", str(self.manifest), "--env", "test",

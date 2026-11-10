@@ -870,6 +870,8 @@ def main(argv=None, out=sys.stdout, err=sys.stderr) -> int:
                 commit = commit_status(repo_arg(args.repo), live, push=args.push, remote=args.remote)
                 pushed = f"，已推送到 {args.remote}" if args.push else "（本地，未推送）"
                 print(f"已提交 {BRANCH_PREFIX}{live['env']}：{commit[:12]}{pushed}", file=err if args.json else out)
+            if args.all:  # the panel's data step: re-ask the repositories the 插件 tab's cache lacks or has stale
+                plugins_view.check_due(_load(manifest), manifest)
             result = all_status(manifest, args.env, args.repo, args.fetch, live) if args.all else live
             if args.json:
                 out.write(json.dumps(result, ensure_ascii=False, indent=2) + "\n")

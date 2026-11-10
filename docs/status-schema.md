@@ -169,7 +169,7 @@
 
 ## 插件视图（`plugins_view`，schema 1 新增，面板「插件」标签使用）
 
-`status --json --all` 的「全部状态」顶层新增可选字段 `plugins_view`，由 `engine/plugins_view.py` 的 `view` 在读状态时按清单、`repos.json` 和本机状态算出，不写进 `status/<环境>` 分支。它不联网：仓库是公开还是私有只读 `bin/agent-env plugin repos --refresh` 写的缓存（`${XDG_STATE_HOME:-~/.local/state}/agent-env/repo-visibility.json`）；`bin/agent-env plugin repos` 只打印缓存。旧报告没有这个字段，面板的「插件」标签显示空状态，不报错。
+`status --json --all` 的「全部状态」顶层新增可选字段 `plugins_view`，由 `engine/plugins_view.py` 的 `view` 在读状态时按清单、`repos.json` 和本机状态算出，不写进 `status/<环境>` 分支。它不联网：仓库是公开还是私有只读 `bin/agent-env plugin repos --refresh` 写的缓存（`${XDG_STATE_HOME:-~/.local/state}/agent-env/repo-visibility.json`）；`bin/agent-env plugin repos` 只打印缓存。`view` 本身不联网；`status --all` 在算 `view` 之前先重查缓存里没有、没查到或查于 24 小时前的仓库（最多等 4 秒，查不到就保持缓存原样），`plugin publish` 推送成功后把那个仓库的 `empty` 改成 `false`。旧报告没有这个字段，面板的「插件」标签显示空状态，不报错。
 
 ```json
 "plugins_view": {

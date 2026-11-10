@@ -1594,6 +1594,7 @@ def _step_push(manifest, name, files, dest, h, yes=False, out=None, **_):
         raise PluginError(_diverged(clone, url, branch, name))
     ahead = _git(clone, "rev-list", "--reverse", f"{remote}..HEAD" if has_remote else "HEAD").stdout.split()
     if not ahead:
+        _mark_pushed(url)  # the content is there, so the repository is not empty (an old cache may still say so)
         return f"{url} 的 {branch} 已有这份内容，无需推送"
     vis = visibility(get(manifest, name))
     seen = _remote_visibility(url)
@@ -1628,6 +1629,7 @@ def _step_push(manifest, name, files, dest, h, yes=False, out=None, **_):
     there = _git(clone, "ls-remote", "origin", f"refs/heads/{branch}", network=True).stdout.split()
     if not there or there[0] != head:
         raise PluginError(f"推送后 {url} 的 {branch} 不是 {head[:7]}。修复：git -C {render._tilde(clone)} fetch 看远端，再重跑 publish --yes")
+    _mark_pushed(url, seen)  # the panel's 插件 tab must not keep calling it 空仓 until the next refresh
     return f"已推送 {len(ahead)} 个提交到 {url}（{branch}，{head[:7]}）"
 
 
@@ -1768,6 +1770,12 @@ def _remote_visibility(url: str) -> dict:
         return {"visibility": "unknown", "error": f"认不出 {url} 是哪个托管上的仓库",
                 "fix": "repo 写成 https://<托管>/<owner>/<仓库> 或 git@<托管>:<owner>/<仓库>.git"}
     return plugins_view.probe(key)
+
+
+def _mark_pushed(url: str, seen=None) -> None:
+    """Record in the visibility cache that the repository now has content (plugins_view.mark_pushed; never raises)."""
+    import plugins_view  # imports this module
+    plugins_view.mark_pushed(url, seen)
 
 
 def _push_refusal(vis: str, seen: dict, url: str) -> str:

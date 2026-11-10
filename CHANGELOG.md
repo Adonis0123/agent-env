@@ -10,6 +10,12 @@ All notable changes to this project are listed here. Versions follow [Semantic V
   in a plugin that has `skills-lock.json` and read `.agents/skills/`, or fetch each skill from its `sourceUrl` and
   `skillPath` with git. The default pointer limit is 400 characters (was 300).
 
+### Fixed
+
+- The 插件 tab no longer shows a stale repository cache: `plugin publish` marks a repository it pushed to as not
+  empty, and `status --all` re-asks (within 4 seconds) only the repositories the cache lacks, such as a renamed
+  one, or last answered over 24 hours ago. A host that cannot be reached leaves the cache as it was.
+
 ## [0.1.0] - 2026-11-10
 
 First public release: the engine, split from a private setup that runs it on macOS, WSL, a Linux server and a

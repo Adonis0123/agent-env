@@ -225,6 +225,83 @@ class CacheTests(ViewBase):
         self.assertIn(pv.REFRESH_COMMAND, text)
 
 
+
+class DueTests(CacheTests):
+    """`status --all` re-asks only what the cache lacks or has stale (check_due); publish clears 空仓 (mark_pushed)."""
+
+    def check(self, m, run, now="2026-11-10T01:00:00Z", budget=pv.DUE_BUDGET):
+        return pv.check_due(m, self.mpath, repos_file=self.repos_file, run=run, now=now, budget=budget)
+
+    def test_fresh_cache_asks_nobody(self):
+        m = self.make()
+        self.refresh(m, FakeRun(self.answers()))
+        run = FakeRun(self.answers())
+        self.assertEqual(self.check(m, run), [])
+        self.assertEqual(run.calls, [])
+
+    def test_a_renamed_repo_is_asked_alone(self):
+        m = self.make()
+        self.refresh(m, FakeRun(self.answers()))
+        m["plugins"]["per"]["repo"] = "https://github.com/me/plugin-personal-v2"  # renamed in the manifest
+        new = "github.com/me/plugin-personal-v2"
+        self.assertEqual({r["key"]: r for r in self.view(m)["repos"]}[new]["visibility"], "unknown")
+        run = FakeRun({"me/plugin-personal-v2": gh("PRIVATE")})
+        self.assertEqual(self.check(m, run), [new])
+        self.assertEqual([c[3] for c in run.calls], ["me/plugin-personal-v2"])
+        repos = {r["key"]: r for r in self.view(m)["repos"]}
+        self.assertEqual(repos[new]["visibility"], "private")
+        self.assertEqual(repos[new]["checked_at"], "2026-11-10T01:00:00Z")
+        self.assertEqual(repos[PUB]["checked_at"], "2026-11-10T00:00:00Z")  # the others are kept as they were
+
+    def test_a_stale_cache_is_asked_again(self):
+        m = self.make()
+        self.refresh(m, FakeRun(self.answers()))
+        ans = self.answers()
+        ans["me/plugin-public"] = gh("PUBLIC", False)
+        run = FakeRun(ans)
+        later = "2026-11-11T00:00:01Z"  # just over STALE_AFTER
+        self.assertEqual(len(self.check(m, run, now=later)), 5)
+        pub = next(c for c in self.view(m)["plugin_repos"] if c["visibility"] == "public")
+        self.assertNotIn("empty_repo", [n["code"] for n in pub["notes"]])
+
+    def test_network_failure_keeps_what_the_panel_showed(self):
+        m = self.make()
+        self.assertEqual(self.check(m, FakeRun({}, missing={"gh", "tool"})), [])
+        self.assertFalse(pv.cache_path().exists())  # nothing learned, nothing written
+        for r in self.view(m)["repos"]:
+            self.assertEqual((r["visibility"], r["fix"]), ("unknown", pv.REFRESH_COMMAND))
+        self.refresh(m, FakeRun(self.answers()))
+        self.assertEqual(self.check(m, FakeRun({}), now="2026-11-12T00:00:00Z"), [])  # stale, host says no
+        repos = {r["key"]: r for r in self.view(m)["repos"]}
+        self.assertEqual((repos[PER]["visibility"], repos[PER]["checked_at"]), ("private", "2026-11-10T00:00:00Z"))
+
+    def test_a_slow_host_does_not_hold_the_panel(self):
+        import time
+        m = self.make()
+
+        def slow(cmd, **kw):
+            time.sleep(3)
+            return subprocess.CompletedProcess(cmd, 0, json.dumps({"visibility": "PUBLIC"}), "")
+        start = time.monotonic()
+        self.assertEqual(self.check(m, slow, budget=0.2), [])
+        self.assertLess(time.monotonic() - start, 2.5)
+
+    def test_mark_pushed_clears_empty_and_keeps_the_rest(self):
+        m = self.make()
+        self.refresh(m, FakeRun(self.answers()))  # PUB is cached as empty
+        pv.mark_pushed(f"https://{PUB}.git", None, now="2026-11-10T02:00:00Z")
+        repos = {r["key"]: r for r in self.view(m)["repos"]}
+        self.assertIs(repos[PUB]["empty"], False)
+        self.assertEqual(repos[PUB]["checked_at"], "2026-11-10T00:00:00Z")  # visibility itself was not re-asked
+        self.assertEqual(repos[COMPANY]["visibility"], "private")
+        pub = next(c for c in self.view(m)["plugin_repos"] if c["visibility"] == "public")
+        self.assertNotIn("empty_repo", [n["code"] for n in pub["notes"]])
+        pv.mark_pushed(f"https://{PER}", {"visibility": "private", "empty": True, "via": "gh"}, now="2026-11-10T03:00:00Z")
+        per = {r["key"]: r for r in self.view(m)["repos"]}[PER]
+        self.assertEqual((per["visibility"], per["empty"], per["checked_at"]), ("private", False, "2026-11-10T03:00:00Z"))
+        pv.mark_pushed("not a url")  # never raises
+
+
 class EnvironmentTests(ViewBase):
     def test_rows_and_others(self):
         m = self.make()

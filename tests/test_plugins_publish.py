@@ -83,6 +83,20 @@ class CommitAndPushTests(PublishBase):
         state = plugins_view.plugin_state(m, "pub", self.rules(), plugins.read_ledger())
         self.assertEqual(state["publish"]["state"], "pushed")
 
+    def test_push_tells_the_panel_the_repo_is_not_empty(self):
+        key = plugins_view.repo_key(self.url)
+        other = {"visibility": "private", "empty": False, "via": "gh", "checked_at": "2026-11-01T00:00:00Z"}
+        plugins_view._write_cache({key: dict(PUBLIC_REPO, empty=True, checked_at="2026-11-01T00:00:00Z"),
+                                   "github.com/me/other": other}, "2026-11-01T00:00:00Z")
+        self.seen = dict(PUBLIC_REPO, empty=True)  # the host still said empty just before the push
+        rc, text = self.publish(self.make(), yes=True)
+        self.assertEqual(rc, 0, text)
+        cache = plugins_view.read_cache()
+        self.assertIs(cache[key]["empty"], False)
+        self.assertEqual(cache[key]["visibility"], "public")
+        self.assertNotEqual(cache[key]["checked_at"], "2026-11-01T00:00:00Z")
+        self.assertEqual(cache["github.com/me/other"], other)
+
     def test_no_change_makes_no_commit_and_counts_as_pushed_without_yes(self):
         m = self.make()
         self.publish(m, yes=True)
