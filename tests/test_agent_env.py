@@ -691,5 +691,112 @@ class DoctorTimeBoundTests(Base):
         self.assertEqual(sorted(started), ids)
 
 
+class UnknownEnvTests(unittest.TestCase):
+    """--env with a name the manifest does not have fails, lists the names and says what to do."""
+
+    DEMO = ENGINE.parent / "examples" / "demo" / "manifest" / "habits.toml"
+
+    def run_cli(self, *argv):
+        out, err = io.StringIO(), io.StringIO()
+        return agent_env.main(list(argv), out=out, err=err), out.getvalue(), err.getvalue()
+
+    def test_detect_env_accepts_a_declared_name(self):
+        self.assertEqual(agent_env.detect_env({"environments": {"mac": {"platform": "darwin"}}}, "mac"), "mac")
+
+    def test_unknown_name_lists_the_declared_environments(self):
+        for cmd in (["doctor"], ["status", "--json"], ["eval"]):
+            code, out, err = self.run_cli(*cmd, "--manifest", str(self.DEMO), "--env", "nosuch")
+            self.assertEqual(code, 1, cmd)
+            self.assertEqual(out, "", cmd)
+            self.assertIn("清单里没有环境「nosuch」", err)
+            self.assertIn("清单里有：grok-bot、mac、vps-helper、wsl", err)
+            self.assertIn("修复：", err)
+
+    def test_name_differing_only_by_case_is_refused_and_suggested(self):
+        code, _, err = self.run_cli("doctor", "--manifest", str(self.DEMO), "--env", "MAC")
+        self.assertEqual(code, 1)
+        self.assertIn("清单里没有环境「MAC」", err)
+        self.assertIn("是不是「mac」（环境名区分大小写）", err)
+
+    def test_empty_manifest_says_no_environment_is_declared(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "habits.toml"
+            path.write_text("", encoding="utf-8")
+            code, out, err = self.run_cli("doctor", "--manifest", str(path), "--env", "mac")
+        self.assertEqual(code, 1)
+        self.assertEqual(out, "")
+        self.assertIn("清单还没有登记任何环境", err)
+        self.assertIn("[environments.mac]", err)
+        self.assertNotIn("Traceback", err)
+
+    def test_environments_that_is_not_a_table_does_not_crash(self):
+        with self.assertRaises(agent_env.AgentEnvError) as ctx:
+            agent_env.detect_env({"environments": "mac"}, "mac")
+        self.assertIn("清单还没有登记任何环境", str(ctx.exception))
+
+    # A target may use an environment that [environments] deliberately does not declare; --env takes it too.
+    TARGET_ONLY = {"environments": {"mac": {"platform": "darwin"}},
+                   "targets": [{"id": "public/rules", "env": "Public"}, {"id": "mac/x", "env": "mac"}, "junk", {}]}
+
+    def test_known_envs_is_the_sorted_union_of_declared_and_target_envs(self):
+        self.assertEqual(agent_env.known_envs(self.TARGET_ONLY), ["Public", "mac"])
+        self.assertEqual(agent_env.known_envs({"environments": "x", "targets": "y"}), [])
+
+    def test_target_only_env_is_accepted(self):
+        self.assertEqual(agent_env.detect_env(self.TARGET_ONLY, "Public"), "Public")
+
+    def test_name_in_neither_is_refused_and_lists_the_union(self):
+        with self.assertRaises(agent_env.AgentEnvError) as ctx:
+            agent_env.detect_env(self.TARGET_ONLY, "nosuch")
+        self.assertIn("清单里有：Public、mac。", str(ctx.exception))
+
+    def test_case_hint_looks_at_target_only_names_too(self):
+        with self.assertRaises(agent_env.AgentEnvError) as ctx:
+            agent_env.detect_env(self.TARGET_ONLY, "public")
+        self.assertIn("是不是「Public」（环境名区分大小写）", str(ctx.exception))
+
+    def test_no_matching_machine_names_only_fixes_that_work(self):
+        manifest = {"environments": {"other": {"platform": "no-such-platform"}},
+                    "targets": [{"id": "v/t", "env": "virtual"}]}
+        with self.assertRaises(agent_env.AgentEnvError) as ctx:
+            agent_env.detect_env(manifest, None)
+        self.assertIn("加 --env <环境名>（清单里有：other、virtual）", str(ctx.exception))
+        for name in ("other", "virtual"):  # every name the message offers is accepted
+            self.assertEqual(agent_env.detect_env(manifest, name), name)
+        with self.assertRaises(agent_env.AgentEnvError) as ctx:
+            agent_env.detect_env({}, None)
+        self.assertNotIn("--env", str(ctx.exception))
+        self.assertIn("[environments.<名字>]", str(ctx.exception))
+
+    def test_doctor_status_eval_run_for_a_target_only_env(self):
+        starter = ENGINE.parent / "profiles" / "_template" / "starter"
+        with tempfile.TemporaryDirectory() as tmp:
+            layer = Path(tmp) / "layer"
+            for rel in ("manifest/habits.toml", "sources/agents-md/personal.md"):
+                (layer / rel).parent.mkdir(parents=True, exist_ok=True)
+                (layer / rel).write_bytes((starter / rel).read_bytes())
+            for d in ("docs", "hooks"):
+                (layer / "sources" / d).mkdir()
+            path = layer / "manifest" / "habits.toml"
+            text = path.read_text(encoding="utf-8")
+            declared = '[environments.my-machine]\nplatform = "darwin" # CHANGE: "darwin" or "linux"\n'
+            self.assertIn(declared, text)
+            path.write_text(text.replace(declared, ""), encoding="utf-8")
+            home = Path(tmp) / "home"
+            home.mkdir()
+            env = {"HOME": str(home), "XDG_STATE_HOME": str(home / "state")}
+            with mock.patch.dict(os.environ, env):
+                code, out, err = self.run_cli("doctor", "--manifest", str(path), "--env", "my-machine")
+                self.assertEqual(code, 1, err)  # findings (nothing written yet), not a refusal
+                self.assertIn("落点 my-machine/claude-code", out)
+                code, out, err = self.run_cli("status", "--json", "--manifest", str(path), "--env", "my-machine")
+                self.assertEqual(json.loads(out)["env"], "my-machine", err)
+                code, out, err = self.run_cli("eval", "--manifest", str(path), "--env", "my-machine")
+                self.assertNotIn("清单里没有环境", err)
+                code, out, err = self.run_cli("doctor", "--manifest", str(path), "--env", "My-Machine")
+                self.assertEqual(code, 1)
+                self.assertIn("是不是「my-machine」（环境名区分大小写）", err)
+
+
 if __name__ == "__main__":
     unittest.main()

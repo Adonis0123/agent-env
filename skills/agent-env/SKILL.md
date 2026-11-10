@@ -9,6 +9,19 @@ description: Runbook for the agent habit engine (agent-env) on Mac, WSL or a rem
 
 本机细节：`$REPO/docs/runbook-local.md` 存在时先读它（同步命令、各环境的运维 skill、只在这几台机器成立的做法）。
 
+## 0. 用户怎么说 → agent 做什么
+
+用户不写代码、不敲命令，只说一句话；命令都由你跑，结果用大白话讲。下表是日常四类请求，细节在对应小节。
+
+| 用户说 | 你做什么 | 要用户本人做的 |
+| --- | --- | --- |
+| 检查一下我的环境 / 体检一下 | 第 1 节：有 `sync_command` 先同步 → `$REPO/bin/agent-env check` → `$REPO/bin/agent-env doctor` → 汇报五态计数，逐条说明漂移和缺失是什么意思。只读，不改任何文件 | 无 |
+| 把有问题的修好 | 第 2 节那张表逐条对：修法是 `render ... --write` 的直接修（引擎先快照）；会覆盖已有内容的链接、会改宿主配置的 MCP 命令，先给用户看再做。修完重跑 `doctor`，修坏了 `rollback` | 同意覆盖或改配置；登录过期时自己登录 |
+| 发布规则 / 同步到 bot | 第 4 节：`$REPO/bin/agent-env plugin publish --all` 先演练，把仓库、可见性、待推送内容给用户看；用户确认后加 `--yes`。云端 bot 再给出指路规则 | 确认推送；登录 GitHub；在 bot 的 app 里粘贴指路规则并说「存好了」 |
+| 加一台机器 / 加一个 agent | 第 3 节：在 `$REPO` 里建 `profiles/<环境>/`，从引擎的 `profiles/_template/`（引擎在 `vendor/agent-env/` 时是 `$REPO/vendor/agent-env/profiles/_template/`）复制四个档案文件，不带 `starter/`，命令见该目录 `README.md` 第 3 步；查实新宿主那张表 → 在清单加环境和 `[[targets]]` → `check` → `doctor` → `status --commit` | 在新机器上登录；确认角色（`cli` / `bot` / `cron` / `remote`） |
+
+第一次安装（还没有清单）：按引擎 `README.md` 的「Use it for your setup」，从 `profiles/_template/starter/` 复制出个人层，再回到上表。
+
 ## 1. 例行流程：sync → doctor → (eval) → status --commit
 
 按顺序做，每步看结果再决定下一步。
@@ -45,7 +58,7 @@ description: Runbook for the agent habit engine (agent-env) on Mac, WSL or a rem
 
 ## 3. 接入新宿主清单
 
-接一个新宿主（如 Gemini、OpenCode、新的对话 bot）时，逐项查实再填。接一台新机器（远程 Linux、新的 WSL）时，先复制档案模板 `profiles/_template/`，按它的 `README.md` 走：克隆 → 写档案 → 登记清单 → `doctor` → `status --commit --push`。每项写来源：官方文档链接、本机实测命令或源码位置。查不到的写 `UNVERIFIED`，不要猜。
+接一个新宿主（如 Gemini、OpenCode、新的对话 bot）时，逐项查实再填。接一台新机器（远程 Linux、新的 WSL）时，先复制引擎里的档案模板 `profiles/_template/`（引擎在 `vendor/agent-env/` 时是 `$REPO/vendor/agent-env/profiles/_template/`；只复制四个档案文件，不带 `starter/`），按它的 `README.md` 走：克隆 → 写档案 → 登记清单 → `doctor` → `status --commit --push`。每项写来源：官方文档链接、本机实测命令或源码位置。查不到的写 `UNVERIFIED`，不要猜。
 
 | 项 | 要填什么 | 怎么查 |
 | --- | --- | --- |
@@ -106,7 +119,7 @@ description: Runbook for the agent habit engine (agent-env) on Mac, WSL or a rem
 4. **合入**：只改清单 `[sources]` 指向的源（规则改 `rules_src` 目录里对应插件的文件：`public.md` 公开、`personal.md` 个人、`local.md` 本机；`docs` 目录、源仓库的共享 `settings.json`，或 `skills` 目录），按该仓库的规则走。`rules` 的 `AGENTS.md` 是生成文件，不手改：改完规则源，对本机每个合成落点运行 `$REPO/bin/agent-env render --target <落点> --write` 重新合成（有 `sync_command` 的环境不改，等源推送后跑它）。改规则先跑 `zsh <[sources] eval 指向的脚本> --static`，措辞改动按 `[sources] docs` 目录下 `agents-md-eval.md` 跑相关用例。不 commit、不 push，除非用户要求。
 5. **同步**：合入后照例 sync → `bin/agent-env doctor`；生成类落点（Hermes、WorkBuddy）跑 `render --write`，云端落点重新投递。落点 memory 里已合回源的条目，提醒用户可以在该宿主里删掉，AI 不替宿主删。
 
-## 5. 远程云主机，本机投递（remote-exec 环境）
+## 6. 远程云主机，本机投递（remote-exec 环境）
 
 只能从本机经命令前缀操作的主机（如云主机上的团队 bot）。清单写 `[environments.<名字>] transport = "remote-exec"`，`exec` 前缀从 stdin 读 sh 脚本在远程执行，`send` 前缀传文件；不写 `platform`，命令都加 `--env <名字>`。
 

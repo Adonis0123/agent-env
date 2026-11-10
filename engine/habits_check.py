@@ -31,6 +31,9 @@ from mcp import allowed_in as mcp_allowed_in  # noqa: E402
 
 PASS, WARN, FAIL = "PASS", "WARN", "FAIL"
 WARN_RATIO = 0.8
+# What to do when there is no manifest at all (a first run); shared with agent_env's own load error.
+NO_MANIFEST_HINT = ("还没有清单就把引擎的 profiles/_template/starter/ 复制到自己的私有仓库，"
+                    "在那里运行 bin/agent-env（见 README「Use it for your setup」）")
 
 
 class Report:
@@ -239,10 +242,20 @@ def _check_file_registry(rep, c, kind, root, registry, visibility, discovered):
             rep.add(PASS, c, f"{kind}「{rel}」：{vis}")
 
 
+def _unset(root, key):
+    """The path as written, or a plain sentence when [sources] has no such key (instead of printing None)."""
+    return root if isinstance(root, str) else f"清单 [sources] 里没有写 {key}"
+
+
+def _empty_dir_fix(key):
+    return (f"在 [sources] 里把 {key} 指向存在的目录；还没有内容时建一个空目录也可以："
+            f"mkdir -p sources/{key}，清单写 {key} = \"../sources/{key}\"（相对清单目录）")
+
+
 def check_docs(rep, m, visibility):
     root = m.get("sources", {}).get("docs")
     if not isinstance(root, str) or not Path(root).is_dir():
-        rep.add(FAIL, "docs", f"docs 目录不存在：{root}", "在 [sources] 里把 docs 指向存在的目录")
+        rep.add(FAIL, "docs", f"docs 目录不存在：{_unset(root, 'docs')}", _empty_dir_fix("docs"))
         return
     errors = []
     discovered = _walk_md(root, errors)
@@ -256,7 +269,7 @@ def check_docs(rep, m, visibility):
 def check_hooks(rep, m, visibility):
     root = m.get("sources", {}).get("hooks")
     if not isinstance(root, str) or not Path(root).is_dir():
-        rep.add(FAIL, "hooks", f"hooks 目录不存在：{root}", "在 [sources] 里把 hooks 指向存在的目录")
+        rep.add(FAIL, "hooks", f"hooks 目录不存在：{_unset(root, 'hooks')}", _empty_dir_fix("hooks"))
         return
     # Only wired hooks are registered, so unregistered scripts are not reported.
     _check_file_registry(rep, "hooks", "hook 脚本", root, m.get("hooks", {}), visibility, [])
@@ -822,7 +835,9 @@ def run_checks(manifest_path):
     try:
         m = load_manifest(manifest_path)
     except Exception as exc:  # unreadable file, bad TOML, bad encoding
-        rep.add(FAIL, "load", f"清单读不了：{exc}", "确认路径存在且是合法的 UTF-8 TOML")
+        shown = "" if str(manifest_path) in str(exc) else f"{manifest_path}（"
+        rep.add(FAIL, "load", f"清单读不了：{shown}{exc}{'）' if shown else ''}",
+                f"确认路径存在且是合法的 UTF-8 TOML，或用 --manifest / AGENT_ENV_MANIFEST 指定；{NO_MANIFEST_HINT}")
         return rep
     roles = m.get("roles") if _is_str_list(m.get("roles")) else []
     visibility = m.get("visibility") if _is_str_list(m.get("visibility")) else []

@@ -1,0 +1,2 @@
+# The engine is a separate clone (update it with: git -C vendor/agent-env pull). Delete this line if you vendor it with git subtree.
+vendor/agent-env/

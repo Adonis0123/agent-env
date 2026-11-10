@@ -1,6 +1,6 @@
 # 新环境档案模板
 
-接一台新机器（远程 Linux、新的 WSL、另一台 Mac）时，复制本目录为 `profiles/<环境>/`，按下面的步骤填写。环境名只用字母、数字、点、下划线和连字符，它同时是状态分支名 `status/<环境>`。
+接一台新机器（远程 Linux、新的 WSL、另一台 Mac）时，把本目录的四个档案文件复制到个人环境仓库的 `profiles/<环境>/`（命令见下面第 3 步），按下面的步骤填写。环境名只用字母、数字、点、下划线和连字符，它同时是状态分支名 `status/<环境>`。
 
 | 文件 | 写什么 |
 | --- | --- |
@@ -8,6 +8,9 @@
 | `skills-deny.txt` | 这台机器上用不了的共享 skill，一行一个，写原因 |
 | `mcp.md` | 每个宿主开哪些 MCP server、为什么关；结果写进清单的 `mcp = [...]` |
 | `README.md` | 本文件；复制后可以删掉，或改成这台机器的接入记录 |
+| `starter/` | 第一次安装用的最小个人层，不属于某台机器的档案；复制档案时不带上（第 3 步的命令只复制上面四个文件） |
+
+第一次安装、还没有清单时，先用 `starter/`：它是一份最小的个人层（一台机器、一个宿主），含 `manifest/habits.toml`、规则源 `sources/`、运行引擎的 `bin/agent-env` 和 `.gitignore`。整个目录复制到自己的私有仓库根目录，把引擎克隆到其中的 `vendor/agent-env/`，改清单里标了 `CHANGE` 的三处，再跑 `bin/agent-env check` 和 `bin/agent-env doctor`（步骤见引擎 `README.md` 的「Use it for your setup」）。接第二台机器时再用下面的档案文件。
 
 档案只放个人层内容（机器名、账号、路径）。引擎代码（`engine/`、`bin/`）里不写这些。
 
@@ -23,7 +26,11 @@
    git clone <共享 skill 仓库地址> ~/.agents     # 共享 skill
    ```
    远程机只读这些源：不在 `~/.claude`、`~/.agents` 里提交。这台机器专属的改动只写环境仓库。
-3. **写档案**：`cp -R profiles/_template profiles/devbox`，把 `AGENTS.ENV.md` 改名为 `AGENTS.devbox.md`，按注释填写三个文件。
+3. **写档案**：在个人环境仓库根目录运行
+   ```bash
+   mkdir -p profiles/devbox && cp vendor/agent-env/profiles/_template/{AGENTS.ENV.md,mcp.md,skills-deny.txt,README.md} profiles/devbox/
+   ```
+   模板在引擎里：引擎放在 `vendor/agent-env/` 时就是上面的路径，引擎在别处时把 `vendor/agent-env` 换成引擎目录。只复制这四个文件，不要用 `cp -R` 复制整个 `_template/`：里面的 `starter/` 是第一次安装用的，带进档案会多出一份清单和 `bin/agent-env`。然后把 `profiles/devbox/AGENTS.ENV.md` 改名为 `AGENTS.devbox.md`，按注释填写三个文件。
 4. **登记进清单** `manifest/habits.toml`：
    ```toml
    [environments.devbox]

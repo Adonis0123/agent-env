@@ -494,5 +494,81 @@ class CheckTests(unittest.TestCase):
         self.assert_has(rep, "WARN", "未核实")
 
 
+class FirstRunMessageTests(unittest.TestCase):
+    """Messages a newcomer meets before a manifest exists, and the starter they are told to copy."""
+
+    STARTER = ENGINE.parent / "profiles" / "_template" / "starter"
+
+    def test_missing_manifest_names_the_path_and_the_starter(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "manifest" / "habits.toml"
+            rep = habits_check.run_checks(path)
+        self.assertFalse(rep.ok)
+        (row,) = rep.results
+        self.assertIn("清单读不了", row["message"])
+        self.assertIn(str(path), row["message"])
+        self.assertIn("AGENT_ENV_MANIFEST", row["fix"])
+        self.assertIn("profiles/_template/starter/", row["fix"])
+
+    def test_bad_toml_names_the_path(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "habits.toml"
+            path.write_text("x = [\n", encoding="utf-8")
+            rep = habits_check.run_checks(path)
+        self.assertIn(str(path), rep.results[0]["message"])
+
+    def test_unset_docs_and_hooks_say_so_and_allow_an_empty_directory(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "habits.toml"
+            path.write_text('schema = 1\nroles = ["cli"]\nvisibility = ["public", "private"]\n[sources]\n',
+                            encoding="utf-8")
+            rep = habits_check.run_checks(path)
+        for key in ("docs", "hooks"):
+            (row,) = [r for r in rep.results if r["check"] == key]
+            self.assertEqual(row["level"], "FAIL")
+            self.assertIn(f"清单 [sources] 里没有写 {key}", row["message"])
+            self.assertNotIn("None", row["message"])
+            self.assertIn(f"mkdir -p sources/{key}", row["fix"])
+
+    def test_starter_manifest_passes_check(self):
+        rep = habits_check.run_checks(self.STARTER / "manifest" / "habits.toml")
+        self.assertEqual([r for r in rep.results if r["level"] == "FAIL"], [])
+        self.assertTrue(os.access(self.STARTER / "bin" / "agent-env", os.X_OK))
+
+    def _layer_with_stub_engine(self, tmp):
+        """A personal layer made from the starter, with a stub engine that prints its arguments."""
+        layer = Path(tmp) / "my layer"
+        (layer / "bin").mkdir(parents=True)
+        wrapper = layer / "bin" / "agent-env"
+        wrapper.write_bytes((self.STARTER / "bin" / "agent-env").read_bytes())
+        wrapper.chmod(0o755)
+        engine = layer / "vendor" / "agent-env" / "bin"
+        engine.mkdir(parents=True)
+        (engine / "agent-env").write_text('#!/bin/sh\necho "engine-ok $*"\n', encoding="utf-8")
+        (engine / "agent-env").chmod(0o755)
+        return layer, wrapper
+
+    def test_starter_wrapper_finds_the_engine_through_a_symlink(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            layer, wrapper = self._layer_with_stub_engine(tmp)
+            elsewhere = Path(tmp) / "on-path"
+            elsewhere.mkdir()
+            link = elsewhere / "agent-env"
+            link.symlink_to(wrapper)
+            for entry in (wrapper, link):
+                res = subprocess.run([str(entry), "check"], capture_output=True, text=True, cwd=tmp)
+                self.assertEqual((res.returncode, res.stdout.strip()), (0, "engine-ok check"), (entry, res.stderr))
+
+    def test_starter_wrapper_without_an_engine_says_how_to_get_one(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            layer, wrapper = self._layer_with_stub_engine(tmp)
+            (layer / "vendor" / "agent-env" / "bin" / "agent-env").unlink()
+            res = subprocess.run([str(wrapper), "check"], capture_output=True, text=True, cwd=tmp)
+        self.assertEqual(res.returncode, 2)
+        self.assertIn("找不到引擎", res.stderr)
+        self.assertIn("修复：", res.stderr)
+        self.assertIn("vendor/agent-env", res.stderr)
+
+
 if __name__ == "__main__":
     unittest.main()

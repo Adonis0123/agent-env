@@ -3,6 +3,9 @@
 Decision: `docs/adr/0005-targets-pull-plugins.md`. Terms: `GLOSSARY.md`. The demo in `examples/demo/` uses
 every part described here.
 
+> Everyday requests in plain words ("check my setup", "fix what is wrong", "publish rules", "add a machine") and
+> what the agent runs for each: the table at the top of `skills/agent-env/SKILL.md` (用户怎么说 → agent 做什么).
+
 ## Goals
 
 - Every agent environment (your own machines, a remote server, a vendor-hosted bot, someone else's machine) gets

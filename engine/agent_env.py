@@ -27,8 +27,9 @@ Requires Python 3.11+ (tomllib).
 import sys
 
 if sys.version_info < (3, 11):
-    print("agent-env 需要 Python 3.11+（依赖 tomllib），当前是 %d.%d；"
-          "请改用 `uv run --python 3.12 python3 agent_env.py ...` 运行。"
+    print("agent-env 需要 Python 3.11+（依赖 tomllib），当前是 %d.%d。"
+          "修复：装 Python 3.11 以上，设 AGENT_ENV_PYTHON=<新 python3 的路径> 后重跑 bin/agent-env；"
+          "或改用 `uv run --python 3.12 python3 agent_env.py ...` 运行。"
           % sys.version_info[:2], file=sys.stderr)
     sys.exit(2)
 
@@ -110,7 +111,7 @@ def _load(manifest_path) -> dict:
         return load_manifest(manifest_path)
     except Exception as exc:  # missing file, bad TOML, bad encoding
         raise AgentEnvError(f"清单读不了：{manifest_path}（{exc}）。修复：确认路径存在且是合法的 UTF-8 TOML，"
-                            f"或用 --manifest / AGENT_ENV_MANIFEST 指定")
+                            f"或用 --manifest / AGENT_ENV_MANIFEST 指定；{habits_check.NO_MANIFEST_HINT}")
 
 
 # ── environment ───────────────────────────────────────────────────────────
@@ -132,16 +133,40 @@ def _env_matches(spec) -> bool:
     return True
 
 
+def known_envs(manifest: dict) -> list:
+    """Every environment name --env may take: declared in [environments] or used as `env` by a [[targets]] entry
+    (a target may belong to an environment that is deliberately not declared), sorted."""
+    envs, targets = manifest.get("environments", {}), manifest.get("targets", [])
+    names = set(envs) if isinstance(envs, dict) else set()
+    for t in targets if isinstance(targets, list) else []:
+        if isinstance(t, dict) and isinstance(t.get("env"), str) and t["env"]:
+            names.add(t["env"])
+    return sorted(names)
+
+
 def detect_env(manifest: dict, override=None) -> str:
-    """The environment name: --env, then the first [environments.<name>] matching this machine."""
+    """The environment name: --env (a name the manifest knows, see known_envs), then the first
+    [environments.<name>] matching this machine."""
+    envs = manifest.get("environments", {})
+    known = known_envs(manifest)
     if override:
         name = override
+        if name not in known:  # exact match only: a status branch and a target's `env` are case-sensitive
+            if not known:
+                raise AgentEnvError(f"清单里没有环境「{name}」：清单还没有登记任何环境，也没有落点。"
+                                    f"修复：在清单写 [environments.{name}] platform = \"{sys.platform}\"，"
+                                    f"再给它加 [[targets]]（env = \"{name}\"）")
+            near = [n for n in known if n.lower() == name.lower()]
+            hint = f"是不是「{near[0]}」（环境名区分大小写）？" if near else ""
+            raise AgentEnvError(f"清单里没有环境「{name}」。{hint}清单里有：{'、'.join(known)}。"
+                                f"修复：把 --env 改成其中一个；要接新机器就先在清单写 [environments.{name}]")
     else:
-        envs = manifest.get("environments", {})
         name = next((n for n, spec in envs.items() if _env_matches(spec)), None) if isinstance(envs, dict) else None
         if name is None:
+            use = f"加 --env <环境名>（清单里有：{'、'.join(known)}），或" if known else ""
             raise AgentEnvError(f"清单里没有和本机（{sys.platform}）匹配的环境。"
-                                f"修复：加 --env <名字>，或在清单写 [environments.<名字>] platform = \"{sys.platform}\"")
+                                f"修复：{use}在清单写 [environments.<名字>] platform = \"{sys.platform}\""
+                                + ("" if known else "，再给它加 [[targets]]（env 写这个名字）"))
     if not ENV_NAME_RE.match(name):
         raise AgentEnvError(f"环境名「{name}」含不能用于分支名的字符。修复：只用字母、数字、点、下划线和连字符")
     return name
@@ -355,7 +380,7 @@ def format_doctor(status: dict) -> str:
             cur = hv["current"] or "探测不到"
             head += f"（登记版本 {hv['recorded']}，当前 {cur}）"
             if hv["changed"]:
-                head += "  ⚠ 宿主版本变了，重新核对分类表后更新清单 host_version.recorded"
+                head += "  ⚠ 宿主版本变了，重新核对分类表（skills/agent-env/SKILL.md 第 3 节）后更新清单 host_version.recorded"
         lines.append(head)
         if not t["habits"]:
             lines += ["  （没有登记期望）", ""]

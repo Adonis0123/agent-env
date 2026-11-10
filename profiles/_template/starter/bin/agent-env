@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+# Runs the agent-env engine for this repository. The engine is expected at vendor/agent-env/
+# (a clone or a git subtree of https://github.com/Adonis0123/agent-env); it finds manifest/habits.toml here.
+# readlink -f: a symlink to this script (for example one on PATH) still finds this repository.
+ROOT=$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}" 2>/dev/null || echo "${BASH_SOURCE[0]}")")/.." && pwd)
+ENGINE="$ROOT/vendor/agent-env/bin/agent-env"
+if [ ! -x "$ENGINE" ]; then
+  echo "找不到引擎：vendor/agent-env/bin/agent-env 不存在。修复：在本仓库根目录运行 git clone https://github.com/Adonis0123/agent-env.git vendor/agent-env" >&2
+  exit 2
+fi
+exec "$ENGINE" "$@"
