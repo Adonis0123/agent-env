@@ -470,7 +470,7 @@ class PointerTests(PluginBase):
         self.assertIn("<公开插件仓地址>", text)
         self.assertIn("/workspace", text)
         self.assertIn("从没拉成功过就停下问我", text)
-        self.assertLessEqual(len(text.rstrip("\n")), 300)
+        self.assertLessEqual(len(text.rstrip("\n")), 400)
         self.assertIn("占位符", err.getvalue())
         err = io.StringIO()
         rc = agent_env.main(["plugin", "pointer", "--manifest", str(self.manifest), "--target", "cloud/bot", "--record"],
@@ -484,7 +484,7 @@ class PointerTests(PluginBase):
                    [self.bot(["pub", "per"], token={"name": "BOT_PLUGIN_TOKEN", "expires": "2099-01-01"})])
         m = habits.load_manifest(self.manifest)
         text = plugins.pointer_text(m, habits.find_target(m, "cloud/bot"))
-        self.assertLessEqual(len(text.rstrip("\n")), 300)
+        self.assertLessEqual(len(text.rstrip("\n")), 400)
         self.assertLess(text.index("agent-public"), text.index("agent-personal"))
         self.assertIn("secret BOT_PLUGIN_TOKEN", text)
         state = lambda: {c["name"]: c["state"] for c in self.cells(self.doctor("cloud"), "cloud/bot")}["指路规则"]
@@ -495,9 +495,22 @@ class PointerTests(PluginBase):
                                          "--record"], out=io.StringIO(), err=io.StringIO()), 0)
         self.assertEqual(state(), "synced")
 
+    def test_lock_step_only_when_a_plugin_has_third_party_skills(self):
+        url = "https://github.com/someone/agent-public"
+        m = self.setup({"pub": dict(PUBLIC, repo=url), "per": PERSONAL}, [self.bot(["pub"])])
+        text = plugins.pointer_text(m, habits.find_target(m, "cloud/bot"))
+        self.assertIn("skills/ 直接读", text)
+        for part in ("skills-lock.json", "npx -y skills experimental_install", ".agents/skills/",
+                     "sourceUrl+skillPath", "说明用了哪种"):
+            self.assertIn(part, text)
+        m = self.setup({"pub": dict(PUBLIC, repo=url, skill_sources=[]), "per": PERSONAL}, [self.bot(["pub"])])
+        text = plugins.pointer_text(m, habits.find_target(m, "cloud/bot"))
+        self.assertIn("skills/ 直接读", text)
+        self.assertNotIn("skills-lock.json", text)
+
     def test_too_long(self):
-        m = self.setup({"pub": dict(PUBLIC, repo="https://github.com/" + "x" * 300), "per": PERSONAL})
-        with self.assertRaisesRegex(plugins.PluginError, "超过上限 300.*修复"):
+        m = self.setup({"pub": dict(PUBLIC, repo="https://github.com/" + "x" * 400), "per": PERSONAL})
+        with self.assertRaisesRegex(plugins.PluginError, "超过上限 400.*修复"):
             plugins.pointer_text(m, habits.find_target(m, "cloud/bot"))
 
 

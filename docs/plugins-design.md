@@ -111,8 +111,11 @@ the output alone (`result=failed`).
 
 ## Pointer rule
 
-A cloud-hosted target gets `plugin pointer --target <id>`: about 300 characters telling it which repositories
-to pull, in order, and what to do when a pull fails. The user pastes it into the bot's memory; after the user
+A cloud-hosted target gets `plugin pointer --target <id>`: at most 400 characters by default telling it which repositories
+to pull, in order, how to get their skills, and what to do when a pull fails. Skills in a repository's `skills/`
+are read in place; when a plugin of the pointer has third-party skills, the pointer also says to run
+`npx -y skills experimental_install` in each repository that has a `skills-lock.json` and read `.agents/skills/`,
+falling back to fetching each skill's `sourceUrl` + `skillPath` with git, and to report which way was used. The user pastes it into the bot's memory; after the user
 confirms, `--record` stores its hash, and doctor reports drift when the plugin list or a repository changes.
 A cloud target that installs a private plugin needs a read-only token for that one repository; the manifest
 records only the token's name and expiry date, and doctor warns seven days ahead.

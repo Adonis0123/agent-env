@@ -40,7 +40,7 @@ Manifest contract:
   plugins = ["public", "personal"]            # ordered, later overrides earlier; a local plugin
                                               # (the patch layer) goes last
   token = { name = "VAR", expires = 2027-02-08 }  # cloud-hosted: the read token's name and expiry date only
-  pointer_limit_chars = 300                   # cloud-hosted: longest pointer rule (指路规则)
+  pointer_limit_chars = 400                   # cloud-hosted: longest pointer rule (指路规则)
   pull = { dir = "~/...", output = "~/..." }  # remote-exec: the host pulls the plugins itself into
                                               # <dir>/<name> and joins their AGENTS.md into output
                                               # (engine/pull.py; `deliver` installs the puller)
@@ -109,7 +109,7 @@ NAME_RE = re.compile(r"^[a-z0-9][a-z0-9-]*$")
 ENV_VAR_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 SKILL_NAME_MAX = 64
 SKILL_DESC_MAX = 1024
-POINTER_LIMIT = 300
+POINTER_LIMIT = 400
 DEFAULT_VERSION = "0.1.0"
 WARN_DAYS = 7
 PRESERVE = (".git",)  # kept across rebuilds once the output is a repository clone (phase 2)
@@ -920,7 +920,7 @@ def target_errors(manifest: dict, target: dict) -> list:
     if "pointer_limit_chars" in target:
         v = target["pointer_limit_chars"]
         if isinstance(v, bool) or not isinstance(v, int) or v <= 0:
-            errs.append((f"落点「{tid}」的 pointer_limit_chars 不是正整数", "写成不带引号的正整数，或删掉用默认 300"))
+            errs.append((f"落点「{tid}」的 pointer_limit_chars 不是正整数", "写成不带引号的正整数，或删掉用默认 400"))
     import compose  # engine/compose.py and engine/pull.py import this module
     import pull
     errs += pull.target_errors(manifest, target, spec)
@@ -1910,10 +1910,15 @@ def pointer_text(manifest: dict, target: dict) -> str:
     repos = [table(manifest)[n].get("repo") or f"<{label(visibility(table(manifest)[n]))}插件仓地址>" for n in names]
     secret = token_name(target)
     auth = f"私有仓用 secret {secret} 认证。" if secret else ""
+    # third-party skills ship only as a project skills-lock.json (generated from skill_sources), so the
+    # install step is spelled out only when some plugin of the pointer has one
+    locked = any(table(manifest)[n].get("skill_sources") for n in names)
+    lock = ("；有 skills-lock.json 的仓在仓里跑 npx -y skills experimental_install 后读 .agents/skills/，"
+            "失败就按其 sourceUrl+skillPath 用 git 取，说明用了哪种" if locked else "")
     text = ("每次开工前在 /workspace 按顺序 git pull 这些插件仓（没有就 clone）："
             + "；".join(f"{i}. {r}" for i, r in enumerate(repos, 1)) + "。" + auth
-            + "依次读各仓根目录的 AGENTS.md，后读的覆盖先读的；skills/ 里的技能用到再读。"
-            "拉取失败就用上次拉到的版本，并告诉我可能过期；从没拉成功过就停下问我。")
+            + "依次读各仓根目录 AGENTS.md，后读的覆盖先读的。技能用到再读：skills/ 直接读" + lock + "。"
+            "拉取失败就用上次的版本并说明可能过期；从没拉成功过就停下问我。")
     limit = target.get("pointer_limit_chars", POINTER_LIMIT)
     if len(text) > limit:
         raise PluginError(f"落点「{tid}」的指路规则 {len(text)} 字符，超过上限 {limit}。"

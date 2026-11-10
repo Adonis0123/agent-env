@@ -2,6 +2,14 @@
 
 All notable changes to this project are listed here. Versions follow [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Changed
+
+- The pointer rule now tells a cloud-hosted bot how to get third-party skills: run `npx -y skills experimental_install`
+  in a plugin that has `skills-lock.json` and read `.agents/skills/`, or fetch each skill from its `sourceUrl` and
+  `skillPath` with git. The default pointer limit is 400 characters (was 300).
+
 ## [0.1.0] - 2026-11-10
 
 First public release: the engine, split from a private setup that runs it on macOS, WSL, a Linux server and a
