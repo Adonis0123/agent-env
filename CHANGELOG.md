@@ -4,6 +4,18 @@ All notable changes to this project are listed here. Versions follow [Semantic V
 
 ## [Unreleased]
 
+### Added
+
+- Vendored third-party skills: `vendor = ["name"]` in a plugin copies those `skill_sources` byte for byte from the
+  local copy into `skills/<name>/`, with `UPSTREAM.md` (source, URL, path, upstream and local git tree ids,
+  modified) and `UPSTREAM-LICENSE` inside the folder and a `vendor.json` index at the root. They leave
+  `skills-lock.json`, and the pointer rule drops the `npx` step when no lock entry remains. Upstream licenses are
+  read from `[sources] licenses` (default `<state dir>/licenses`, `<owner>-<repo>.LICENSE`); a missing one fails
+  `check` and the build.
+- `plugin vendor-diff --plugin <p> --skill <s>`: compare a vendored skill's local copy with upstream HEAD (network),
+  print the diff, and with `--write-license` save the upstream license. Updating stays manual: merge upstream into
+  the local copy, then rebuild.
+
 ### Changed
 
 - The pointer rule now tells a cloud-hosted bot how to get third-party skills: run `npx -y skills experimental_install`

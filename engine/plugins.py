@@ -8,6 +8,9 @@ Manifest contract:
   [sources]
   skills = "~/.agents/skills"                 # own skills: copied into a plugin
   skills_lock = "~/.agents/.skill-lock.json"  # `npx skills` global lock: where third-party skills come from
+  licenses = "~/..."                          # optional; upstream license texts of vendored skills, one
+                                              # <owner>-<repo>.LICENSE per repository (default
+                                              # <state dir>/licenses; engine/vendor.py)
 
   [plugins.<name>]                            # name: lowercase letters, digits, hyphens (<= 64)
   visibility = "public"                       # public 公开 / personal 个人 / company 公司 / local 本机;
@@ -32,6 +35,8 @@ Manifest contract:
   company_skills = ["group/name"]             # company skills (company or local plugins only), copied from
                                               # [sources] company_skills into skills/<last segment>/
   skill_sources = ["name"]                    # third-party skills, recorded by upstream (no copy)
+  vendor = ["name"]                           # those of skill_sources copied instead: skills/<name>/ from the
+                                              # local copy, with UPSTREAM.md, UPSTREAM-LICENSE and vendor.json
   env = ["VAR"]                               # environment variable names it needs, never values
   repo = "https://..."                        # its git repository; unset until it exists
   output = "~/..."                            # optional; default <state dir>/plugins/<name>
@@ -95,6 +100,7 @@ import collation
 import company_skills
 import frontmatter
 import render
+import vendor
 from habits import (MANIFEST_PATH_KEY, PREAMBLE_KEY, TEXT, _scan_lines, normalize, parse_sections, rules_src_files,
                     suspect_headings, unclosed_fence)
 from state import state_dir
@@ -145,6 +151,21 @@ HOME_PATH_RES = (
     re.compile(r"(?<![\w/.~\\-])~[A-Za-z_][A-Za-z0-9._-]*[\\/]"),
 )
 EMAIL_RE = re.compile(r"(?<![\w.+-])(?!git@)[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}")
+# Reserved for documentation and tests, so never a real mailbox: RFC 2606 / RFC 6761 second-level domains
+# (exactly these three) and top-level domains (any name under them). Nothing else is exempt.
+RESERVED_EMAIL_DOMAINS = ("example.com", "example.org", "example.net")
+RESERVED_EMAIL_TLDS = ("example", "test", "invalid", "localhost")
+
+
+def real_email(text: str) -> bool:
+    """Whether text holds an email address outside the reserved example domains (foo@example.com passes,
+    foo@examples.com and foo@example.com.cn do not)."""
+    for m in EMAIL_RE.finditer(text):
+        domain = m.group(0).rsplit("@", 1)[1].lower()
+        if domain in RESERVED_EMAIL_DOMAINS or domain.rsplit(".", 1)[-1] in RESERVED_EMAIL_TLDS:
+            continue
+        return True
+    return False
 # Secrets. Three layers: gitleaks on the staged directory (gitleaks_hits), company_skills.SECRET_PATTERNS
 # (what skill installs already refuse) with TOKEN_PATTERNS, and one structural rule that does not depend
 # on how the value is spelled: a sensitive key name followed, on the same line or in the lines of its
@@ -414,7 +435,7 @@ def privacy_hits(files: dict, vis: str, reviewed=()) -> list:
             hits.append(f"{rel} 凭证文件")
         if looks_secret(rel):
             hits.append(f"{rel} 文件名疑似密钥")
-        if guarded and (home_path("/" + rel) or EMAIL_RE.search(rel)):
+        if guarded and (home_path("/" + rel) or real_email(rel)):
             hits.append(f"{rel} 文件名里有家目录路径或邮箱")
         if binary and guarded and not is_image(rel, data):
             hits.append(f"{rel} 不是 UTF-8 文本，也不是允许的图片（扩展名 {list(BINARY_OK)} 且文件头相符）")
@@ -425,7 +446,7 @@ def privacy_hits(files: dict, vis: str, reviewed=()) -> list:
                 if guarded:
                     if home_path(line):
                         found.append(f"{where} 绝对家目录路径")
-                    if not binary and EMAIL_RE.search(line):
+                    if not binary and real_email(line):
                         found.append(f"{where} 邮箱")
                 kinds = secret_kinds(line)
                 if kinds and not binary and vis == "company":
@@ -554,14 +575,31 @@ def _outside_fix(name: str) -> str:
             f"（现在只能放进自写 skill 的目录），再用相对路径引用")
 
 
+def _vendored_hit(hit, files: dict) -> bool:
+    """Whether an outside-path hit is inside a vendored third-party skill (its UPSTREAM.md sits beside it):
+    that text is the upstream's, already public, and editing it would make the copy differ from upstream."""
+    parts = hit[0].split("/")
+    return len(parts) > 2 and parts[0] == "skills" and f"skills/{parts[1]}/{vendor.UPSTREAM_MD}" in files
+
+
 def outside_notes(name: str, vis: str, files: dict) -> list:
     """The warning a personal or company plugin gets for paths that point outside it (a public plugin
-    is refused in render_plugin; a local one is not checked: it never leaves this machine)."""
-    hits = outside_paths(files) if vis in OUTSIDE_WARNED else []
-    if not hits:
-        return []
-    return [f"提醒：{label(vis)}插件「{name}」有 {len(hits)} 处指向插件外的文件（{_outside_shown(hits, 3)}），"
-            f"只拿到插件的机器打不开；公开插件遇到同样的情况会拒绝生成。修复：{_outside_fix(name)}"]
+    is refused in render_plugin; a local one is not checked: it never leaves this machine). Paths inside
+    a vendored third-party skill only get this warning, in a public plugin too."""
+    hits = outside_paths(files) if vis in OUTSIDE_WARNED + ("public",) else []
+    if vis == "public":
+        hits = [h for h in hits if _vendored_hit(h, files)]
+    notes = []
+    own = [h for h in hits if not _vendored_hit(h, files)]
+    if own:
+        notes.append(f"提醒：{label(vis)}插件「{name}」有 {len(own)} 处指向插件外的文件（{_outside_shown(own, 3)}），"
+                     f"只拿到插件的机器打不开；公开插件遇到同样的情况会拒绝生成。修复：{_outside_fix(name)}")
+    third = [h for h in hits if _vendored_hit(h, files)]
+    if third:
+        notes.append(f"提醒：插件「{name}」复制进来的第三方 skill 有 {len(third)} 处指向插件外的文件"
+                     f"（{_outside_shown(third, 3)}），是上游原文，没有拦下。修复：确实影响使用就向上游反馈，"
+                     f"或改本机副本（UPSTREAM.md 会标成已改过）")
+    return notes
 
 
 # ── gitleaks: the same scanner the public repositories already use ─────────
@@ -737,7 +775,7 @@ def plugin_errors(manifest: dict, name: str, spec) -> list:
         return [(f"{lbl} 不是表", f"写成 {lbl} 表，带 visibility、sections、skills 等字段")]
     errs = []
     known = {"visibility", "description", "version", "sections", "omit", "rules_file", "skills", "skill_sources",
-             "company_skills", "privacy_reviewed", "env", "repo", "output"}
+             "vendor", "company_skills", "privacy_reviewed", "env", "repo", "output"}
     extra = sorted(k for k in set(spec) - known)
     if extra:
         errs.append((f"{lbl} 有未知字段 {[_shown(k) for k in extra]}", f"只用 {sorted(known)}；密钥值不要写进清单"))
@@ -760,7 +798,7 @@ def plugin_errors(manifest: dict, name: str, spec) -> list:
                      "写成 https://github.com/<owner>/<repo>，不带用户名、token、查询串；还没建仓就删掉"))
     if vis == LOCAL and spec.get("repo"):
         errs.append((f"{lbl} 是本机插件却写了 repo", "本机插件（补丁层）不推送：删掉 repo，或把 visibility 改成要推送的可见性"))
-    for key in ("sections", "omit", "skills", "skill_sources", "company_skills", "privacy_reviewed", "env"):
+    for key in ("sections", "omit", "skills", "skill_sources", "vendor", "company_skills", "privacy_reviewed", "env"):
         if key in spec and not _str_list(spec[key]):
             errs.append((f"{lbl} 的 {key} 不是字符串列表", f"写成 {key} = [\"...\"]，没有就删掉"))
     if _str_list(spec.get("omit")):
@@ -814,6 +852,7 @@ def plugin_errors(manifest: dict, name: str, spec) -> list:
     dup = sorted(set(spec.get("skills", [])) & set(spec.get("skill_sources", [])))
     if dup:
         errs.append((f"{lbl} 的 {[_shown(d) for d in dup]} 同时在 skills 和 skill_sources", "二选一：有上游就放 skill_sources"))
+    errs += _vendor_errors(manifest, lbl, spec)
     errs += _company_skill_errors(manifest, lbl, spec, vis)
     if spec.get("privacy_reviewed"):
         if vis != "company":
@@ -824,6 +863,128 @@ def plugin_errors(manifest: dict, name: str, spec) -> list:
             errs.append((f"{lbl} 的 privacy_reviewed 第 {bad} 项不是 <文件>#<12 位哈希>",
                          "照生成时报错里给的写法原样抄，如 \"skills/x/scripts/a.py#0123456789ab\""))
     return errs
+
+
+def licenses_dir(manifest: dict) -> Path:
+    """Where the upstream license texts of vendored skills are read from ([sources] licenses, default
+    <state dir>/licenses)."""
+    d = manifest.get("sources", {}).get("licenses")
+    return _resolve(manifest, d) if isinstance(d, str) and d else state_dir() / "licenses"
+
+
+def _vendor_fix(plugin: str, skill: str) -> str:
+    return f"bin/agent-env plugin vendor-diff --plugin {plugin} --skill {skill} --write-license"
+
+
+def _vendor_errors(manifest: dict, lbl: str, spec: dict) -> list:
+    """A plugin's `vendor`: each one a skill_sources entry whose lock entry names a GitHub-style source and
+    its upstream tree, whose local copy exists without symlinks or a file named like the generated ones,
+    and whose upstream license is in the licenses directory. Never skipped: a missing license fails."""
+    names = spec.get("vendor") or []
+    if not names:
+        return []
+    plugin = lbl[len("[plugins."):-1]
+    errs = []
+    extra = [n for n in names if n not in (spec.get("skill_sources") or [])]
+    if extra:
+        errs.append((f"{lbl} 的 vendor 里有不在 skill_sources 的名字 {[_shown(n) for n in extra]}",
+                     "vendor 只写 skill_sources 里要复制进插件的第三方 skill：先加进 skill_sources，或从 vendor 删掉"))
+    if len(set(names)) != len(names):
+        errs.append((f"{lbl} 的 vendor 有重复项", "每个 skill 只写一次"))
+    lock = read_lock(manifest)
+    root = manifest.get("sources", {}).get("skills")
+    lic_dir = licenses_dir(manifest)
+    for s in dict.fromkeys(names):
+        e = lock.get(s)
+        if s in extra or not isinstance(e, dict):
+            continue
+        if not isinstance(e.get("source"), str) or not vendor.SOURCE_RE.match(e["source"]):
+            errs.append((f"{lbl} 要复制的「{_shown(s)}」在锁文件里的 source 不是 <owner>/<repo>",
+                         "只有从 git 仓库装的第三方 skill 能复制进插件：用 npx skills add <owner>/<repo> 重新装它"))
+            continue
+        if not isinstance(e.get("skillFolderHash"), str) or not vendor.TREE_RE.match(e["skillFolderHash"]):
+            errs.append((f"{lbl} 要复制的「{_shown(s)}」在锁文件里没有 skillFolderHash（上游树），判断不了本机改没改过",
+                         f"用 npx skills add {e['source']} 重新装它，让全局锁记下上游树"))
+        d = Path(root) / s if isinstance(root, str) else None
+        if d is None or not (d / "SKILL.md").is_file():
+            errs.append((f"{lbl} 要复制的「{_shown(s)}」本机没装（[sources] skills 下没有 {_shown(s)}/SKILL.md）",
+                         "用 npx skills add 装上，或从 vendor 删掉"))
+            continue
+        keep, _, links = skill_copy(d)
+        if links:
+            errs.append((f"{lbl} 要复制的「{_shown(s)}」本机副本里有符号链接 {links[:3]}",
+                         "把链接换成真实文件，或从 vendor 删掉它"))
+        clash = [g for g in vendor.GENERATED if g in keep]
+        if clash:
+            errs.append((f"{lbl} 要复制的「{_shown(s)}」本机副本里已有 {clash}，和生成的出处文件重名",
+                         "把本机副本里的这些文件改名，或从 vendor 删掉它"))
+        lic = lic_dir / vendor.license_file(e["source"])
+        try:
+            ok = bool(lic.read_bytes().decode("utf-8").strip())
+        except (OSError, UnicodeDecodeError):
+            ok = False
+        if not ok:
+            errs.append((f"{lbl} 要复制的「{_shown(s)}」缺上游许可：许可目录里没有可读的 {lic.name}"
+                         "（复制第三方代码必须带上它的许可）",
+                         f"{_vendor_fix(plugin, s)} 从上游写入；或把上游 LICENSE 原文放到 {_tilde_path(lic)}"))
+    return errs
+
+
+def _tilde_path(p: Path) -> str:
+    home = os.path.expanduser("~")
+    s = str(p)
+    return "~" + s[len(home):] if s == home or s.startswith(home + os.sep) else s
+
+
+def vendored_files(manifest: dict, name: str, spec: dict) -> tuple:
+    """({relative path: (bytes, executable)}, {skill: vendor.json record}) of the plugin's vendored skills:
+    the local copy byte for byte under skills/<name>/, plus UPSTREAM.md and UPSTREAM-LICENSE in each."""
+    files, index = {}, {}
+    names = spec.get("vendor") or []
+    if not names:
+        return files, index
+    lock = read_lock(manifest)
+    root = manifest.get("sources", {}).get("skills")
+    lic_dir = licenses_dir(manifest)
+    for s in names:
+        e = lock.get(s)
+        d = Path(root) / s if isinstance(root, str) else None
+        if not isinstance(e, dict) or d is None or not (d / "SKILL.md").is_file():
+            raise PluginError(f"插件「{name}」要复制的第三方 skill「{s}」没有来源或本机副本。"
+                              f"修复：用 npx skills add 装它，或从 vendor 删掉")
+        lic = lic_dir / vendor.license_file(e["source"])
+        if not lic.is_file():
+            raise PluginError(f"插件「{name}」要复制的第三方 skill「{s}」缺上游许可 {lic.name}。修复：{_vendor_fix(name, s)}")
+        own = {}
+        for rel in skill_copy(d)[0]:
+            full = d / rel
+            own[rel] = (full.read_bytes(), bool(full.stat().st_mode & 0o111))
+        rec = vendor.provenance(s, e, vendor.tree_sha(own))
+        for rel, v in own.items():
+            files[f"skills/{s}/{rel}"] = v
+        files[f"skills/{s}/{vendor.UPSTREAM_MD}"] = (vendor.upstream_md(s, rec), False)
+        files[f"skills/{s}/{vendor.UPSTREAM_LICENSE}"] = (lic.read_bytes(), False)
+        index[s] = rec
+    return files, index
+
+
+def vendor_diff(manifest: dict, plugin: str, skill: str, out, write_license: bool = False) -> int:
+    """`plugin vendor-diff`: the local copy of a vendored skill against upstream HEAD (network)."""
+    spec = get(manifest, plugin)
+    if skill not in (spec.get("vendor") or []) and skill not in (spec.get("skill_sources") or []):
+        raise PluginError(f"插件「{plugin}」的 skill_sources 里没有「{_shown(skill)}」。"
+                          f"修复：改成 {sorted(spec.get('skill_sources') or [])} 之一")
+    e = read_lock(manifest).get(skill)
+    root = manifest.get("sources", {}).get("skills")
+    d = Path(root) / skill if isinstance(root, str) else None
+    if not isinstance(e, dict) or not isinstance(e.get("source"), str) or not vendor.SOURCE_RE.match(e["source"]) \
+            or not e.get("skillPath") or d is None or not (d / "SKILL.md").is_file():
+        raise PluginError(f"「{_shown(skill)}」在锁文件里没有 <owner>/<repo> 来源，或本机没装。修复：用 npx skills add 装它")
+    own = {rel: ((d / rel).read_bytes(), bool((d / rel).stat().st_mode & 0o111)) for rel in skill_copy(d)[0]}
+    try:
+        return vendor.diff_report(skill, e, d, vendor.tree_sha(own), licenses_dir(manifest), write_license, out)
+    except vendor.VendorError as exc:
+        raise PluginError(str(exc))
 
 
 def _company_skill_errors(manifest: dict, lbl: str, spec: dict, vis: str) -> list:
@@ -1269,11 +1430,16 @@ def render_plugin(manifest: dict, name: str, rules_text) -> dict:
     desc = spec.get("description") or f"agent-env 插件 {name}"
     files = {"AGENTS.md": (agents_md(manifest, name, rules_text).encode("utf-8"), False)}
     files.update(_skill_files(manifest, name, spec))
+    vfiles, vindex = vendored_files(manifest, name, spec)
+    files.update(vfiles)
+    if vindex:
+        files[vendor.INDEX] = (_json({"version": 1, "skills": vindex}), False)
     third = spec.get("skill_sources", []) or []
-    if third:
+    locked = [s for s in third if s not in vindex]  # a vendored skill ships as files, never through npx
+    if locked:
         lock = read_lock(manifest)
         entries = {}
-        for s in third:
+        for s in locked:
             e = lock.get(s)
             if not isinstance(e, dict) or not e.get("source") or not e.get("skillPath"):
                 raise PluginError(f"插件「{name}」的第三方 skill「{s}」在锁文件里没有来源。"
@@ -1291,6 +1457,7 @@ def render_plugin(manifest: dict, name: str, rules_text) -> dict:
         "env": list(spec.get("env", []) or []), "sections": [h for h, _ in _rules_parts(manifest, name, rules_text)]
         + [h for h, _ in own_sections(manifest, spec)],
         "skills": list(spec.get("skills", []) or []), "skill_sources": list(third),
+        **({"vendor": list(vindex)} if vindex else {}),
         # only a plugin that has company skills carries the key, so the others keep their bytes
         **({"company_skills": [r.rsplit("/", 1)[-1] for r in spec["company_skills"]]}
            if spec.get("company_skills") else {})}), False)
@@ -1312,7 +1479,7 @@ def render_plugin(manifest: dict, name: str, rules_text) -> dict:
                           + "。修复：把绝对路径改成 ~/ 或环境变量，删掉邮箱和密钥值（示例值写成 <占位符>）；"
                             "不是 UTF-8 文本也不是图片的文件转成 UTF-8，或移到插件之外的 references；"
                             "这段内容只该留在本机就把它移到本机插件（补丁层）")
-    outside = outside_paths(files) if vis == "public" else []
+    outside = [h for h in outside_paths(files) if not _vendored_hit(h, files)] if vis == "public" else []
     if outside:
         raise PluginError(f"公开插件「{name}」有 {len(outside)} 处指向插件外的文件，只拿到插件的人打不开："
                           f"{_outside_shown(outside, 5)}。修复：{_outside_fix(name)}")
@@ -1920,12 +2087,19 @@ def pointer_text(manifest: dict, target: dict) -> str:
     auth = f"私有仓用 secret {secret} 认证。" if secret else ""
     # third-party skills ship only as a project skills-lock.json (generated from skill_sources), so the
     # install step is spelled out only when some plugin of the pointer has one
-    locked = any(table(manifest)[n].get("skill_sources") for n in names)
+    # (a vendored one is already a folder under skills/, so a plugin whose third-party skills are all
+    # vendored has no lock file and needs no npx step)
+    def unvendored(n):
+        spec = table(manifest)[n]
+        return [s for s in spec.get("skill_sources") or [] if s not in (spec.get("vendor") or [])]
+    locked = any(unvendored(n) for n in names)
+    vendored = any(table(manifest)[n].get("vendor") for n in names)
     lock = ("；有 skills-lock.json 的仓在仓里跑 npx -y skills experimental_install 后读 .agents/skills/，"
             "失败就按其 sourceUrl+skillPath 用 git 取，说明用了哪种" if locked else "")
+    copy = "，要装就整个目录复制（含 UPSTREAM 出处和许可）" if vendored else ""
     text = ("每次开工前在 /workspace 按顺序 git pull 这些插件仓（没有就 clone）："
             + "；".join(f"{i}. {r}" for i, r in enumerate(repos, 1)) + "。" + auth
-            + "依次读各仓根目录 AGENTS.md，后读的覆盖先读的。技能用到再读：skills/ 直接读" + lock + "。"
+            + "依次读各仓根目录 AGENTS.md，后读的覆盖先读的。技能用到再读：skills/ 直接读" + copy + lock + "。"
             "拉取失败就用上次的版本并说明可能过期；从没拉成功过就停下问我。")
     limit = target.get("pointer_limit_chars", POINTER_LIMIT)
     if len(text) > limit:

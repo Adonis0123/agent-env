@@ -85,10 +85,43 @@ flowchart LR
 
 A build is byte-stable. It writes into a temporary directory beside the output under a per-output lock and
 swaps it in with renames that roll back on failure, so an interrupted or concurrent build never loses the old
-output or its `.git`. A plugin directory contains `AGENTS.md`, `skills/<name>/SKILL.md` for own skills, a
-project `skills-lock.json` for third-party skills (recorded by upstream, never copied), `agent-env-plugin.json`
+output or its `.git`. A plugin directory contains `AGENTS.md`, `skills/<name>/SKILL.md` for own skills and
+vendored third-party skills, a project `skills-lock.json` for the other third-party skills (recorded by upstream),
+`vendor.json` when it vendors any, `agent-env-plugin.json`
 (name, version, visibility, environment variable names), and thin packaging for several hosts
 (`.claude-plugin/`, `.cursor-plugin/`, the `pi` key of `package.json`), all pointing at the same `skills/`.
+
+#### Vendored third-party skills
+
+A lock entry does not pin anything: `npx skills experimental_install` without a ref installs the upstream's
+latest version and rewrites the lock on a hash mismatch, and a skill the owner edited locally loses the edit. A
+plugin can therefore vendor some of its `skill_sources` (`vendor = ["name"]`, `engine/vendor.py`):
+
+| File | Content |
+| --- | --- |
+| `skills/<name>/…` | the local copy under `[sources] skills`, byte for byte (same copy rules as own skills) |
+| `skills/<name>/UPSTREAM.md` | source, URL, skill path, upstream tree (`skillFolderHash` of the global lock), local tree, modified yes/no |
+| `skills/<name>/UPSTREAM-LICENSE` | the upstream repository's license text, unchanged |
+| `vendor.json` | the same records for every vendored skill, machine-readable |
+
+The provenance and license sit inside the skill folder because a bot or a host copies skill folders one by one;
+a top-level `licenses/` would be left behind. Both trees are git tree object ids (what `git write-tree` gives for
+the folder, the same id GitHub reports for it), so `modified` is an exact comparison, and no commit id is
+recorded because the global lock has none and a build needs no network. A vendored skill leaves
+`skills-lock.json`; a plugin whose third-party skills are all vendored has no lock file, and the pointer rule
+then has no `npx` step. Doctor reports a changed local copy as a stale build, as for own skills.
+
+The license is never fetched during a build. It is read from the licenses directory (`[sources] licenses`,
+default `<state dir>/licenses`), one `<owner>-<repo>.LICENSE` per upstream repository; when it is missing,
+`check` and the build fail with the command that writes it. Upgrade path:
+
+1. `bin/agent-env plugin vendor-diff --plugin <p> --skill <s>` makes a shallow, sparse clone of the upstream,
+   prints the upstream HEAD commit, the tree at install time, the tree at HEAD and the local tree, then the diff
+   from upstream HEAD to the local copy (exit 1 when they differ). `--write-license` saves the upstream license
+   into the licenses directory when it is not there yet.
+2. To update, merge the upstream changes into the local copy by hand, keeping your own edits (`npx skills update`
+   replaces the whole folder), or run `npx skills update` when the copy is unmodified.
+3. `bin/agent-env plugin build` (or `publish`) regenerates the folder, `UPSTREAM.md` and `vendor.json`.
 
 ### 3.2 From plugins to each target
 
@@ -154,8 +187,9 @@ trip. Git credentials come from `env_file`, and only the variables named in `env
 #### Pointer rule (cloud-hosted bots)
 
 `plugin pointer --target <id>` prints the rule; it fails if the text exceeds `pointer_limit_chars`. When a
-plugin has third-party skills, the rule also says to run `npx -y skills experimental_install` in each repository
-that has a `skills-lock.json`, with a git fallback. After the user stores it, `--record` keeps its hash and
+plugin vendors skills, the rule says to copy a skill folder whole (with its provenance and license). When a
+plugin still has third-party skills in a lock file, the rule also says to run `npx -y skills experimental_install`
+in each repository that has a `skills-lock.json`, with a git fallback. After the user stores it, `--record` keeps its hash and
 `delivered` reports drift when the plugin list or a repository changes. A bot that reads a private plugin needs
 a read-only token for that repository; the manifest records only its name and expiry date, and `token` warns
 seven days ahead. Cloud-hosted environments are checked on their `driven_from` machine, because every check
@@ -176,6 +210,7 @@ Everything in `engine/` is Python 3.11+, standard library only.
 | `engine/render.py` | renders a target's file (supplement + sections by role, or compose); `--check`, `--write` after a snapshot |
 | `engine/compose.py` | merges a target's ordered plugins into `rules_output` and reports overrides |
 | `engine/plugins.py` | plugin contract and validation, build, privacy scan, publish ledger and steps, pointer rule, overrides, token state |
+| `engine/vendor.py` | vendored third-party skills: git tree ids, `UPSTREAM.md`, `vendor.json` records, `plugin vendor-diff` against upstream HEAD |
 | `engine/frontmatter.py` | strict reader of SKILL.md front matter scalars (skill name and description limits) |
 | `engine/collation.py` | ICU root collation for file names, so `skills-lock.json` hashes match `npx skills` |
 | `engine/pull.py` | pull contract: `pull.conf`, the joined rules a remote host should have, the delivery steps |

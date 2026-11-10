@@ -813,6 +813,7 @@ def check_plugins(rep, m):
             note = "（没标可见性，按本机处理）" if "visibility" not in spec else ""
             rep.add(PASS, c, f"[plugins.{name}]：{plugins.label(vis)}{note}，章节 {len(spec.get('sections', []))} 个，"
                              f"自写 skill {len(spec.get('skills', []))} 个，第三方 skill {len(spec.get('skill_sources', []))} 个"
+                             + (f"（复制进插件 {len(spec['vendor'])} 个）" if spec.get("vendor") else "")
                              + (f"，公司 skill {len(spec['company_skills'])} 个" if spec.get("company_skills") else ""))
 
 

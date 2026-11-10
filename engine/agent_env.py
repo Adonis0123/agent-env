@@ -17,7 +17,8 @@
   plugin     build: generate plugin directories (plugins); publish: build → scan → commit (into a
              working clone of the plugin's repo) → push with a step ledger; push is a dry run unless
              --yes, and never goes to a public repo for a personal/company plugin; pointer: print or
-             --record a cloud-hosted target's pointer rule
+             --record a cloud-hosted target's pointer rule; vendor-diff: a vendored third-party skill's
+             local copy against upstream HEAD (network), --write-license saves the upstream license
 
 Paths come from the manifest (`~` expanded at run time); no user-specific
 path, machine name or account lives in this file.
@@ -767,6 +768,12 @@ def plugin_cli(manifest_path, args, out, err) -> int:
             if not args.target:
                 raise AgentEnvError("plugin pointer 要指定落点。修复：加 --target <落点 id>，如 --target grok-bot/bot")
             return pointer(manifest_path, args.target, args.record, out, err)
+        if args.action == "vendor-diff":  # a vendored skill's local copy against upstream HEAD (network)
+            if not args.plugin or not args.skill:
+                raise AgentEnvError("plugin vendor-diff 要指定插件和 skill。修复：加 --plugin <名字> --skill <skill 名>")
+            return plugins.vendor_diff(manifest, args.plugin, args.skill, out, write_license=args.write_license)
+        if args.skill or args.write_license:
+            raise AgentEnvError("--skill 和 --write-license 只用于 plugin vendor-diff。修复：删掉它们")
         if args.target:
             raise AgentEnvError("--target 只用于 plugin pointer。修复：build / publish 用 --plugin <名字> 或 --all")
         names = plugins.resolve_names(manifest, args.plugin, args.all)
@@ -841,13 +848,16 @@ def main(argv=None, out=sys.stdout, err=sys.stderr) -> int:
     p.add_argument("--manifest")
     p.add_argument("--target", required=True)
     p.add_argument("--yes", action="store_true", help="install：备份后真正安装（默认演练）")
-    p = sub.add_parser("plugin", help="插件：build 生成目录，publish 生成→扫描→提交→推送（可续跑，推送要加 --yes），pointer 指路规则，repos 各仓库是公开还是私有")
-    p.add_argument("action", choices=["build", "publish", "pointer", "repos"])
+    p = sub.add_parser("plugin", help="插件：build 生成目录，publish 生成→扫描→提交→推送（可续跑，推送要加 --yes），pointer 指路规则，repos 各仓库是公开还是私有，vendor-diff 复制进插件的第三方 skill 和上游 HEAD 的差异")
+    p.add_argument("action", choices=["build", "publish", "pointer", "repos", "vendor-diff"])
     p.add_argument("--refresh", action="store_true", help="repos：联网重查各仓库是公开还是私有，写进缓存（不加只读缓存）")
     p.add_argument("--manifest")
     p.add_argument("--plugin", help="build / publish：只处理这个插件")
     p.add_argument("--all", action="store_true", help="build / publish：清单里全部插件")
     p.add_argument("--target", help="pointer：云端托管落点 id")
+    p.add_argument("--skill", help="vendor-diff：要比较的第三方 skill")
+    p.add_argument("--write-license", action="store_true",
+                   help="vendor-diff：许可目录里还没有时，把上游 LICENSE 写进去（已有的不替换）")
     p.add_argument("--record", action="store_true", help="pointer：用户在 app 里确认存入后，记录内容哈希")
     p.add_argument("--yes", action="store_true",
                    help="publish：真正推送（默认演练：只列出将推送的仓库、提交和文件，不推送）")

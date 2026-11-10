@@ -32,7 +32,7 @@ bot. It fetches its plugins itself, led by a pointer rule.
 `local.md`) in `[sources] rules_src`. Every `## ` section is written in exactly one file and registered in
 `[rule_sections]` with roles and a visibility.
 
-**Plugin** (插件): a repository of rules (`AGENTS.md`), own skills and the sources of third-party skills, with
+**Plugin** (插件): a repository of rules (`AGENTS.md`), own skills, vendored third-party skills (copied with their upstream license) and the sources of the other third-party skills, with
 one visibility. Built by `plugin build`, published by `plugin publish`.
 _Avoid_: bundle, export
 

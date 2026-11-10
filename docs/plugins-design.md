@@ -54,7 +54,17 @@ the plugin it came from. If the overridden part changes upstream, doctor tells y
   rules to each host; cloud bots read the file directly.
 - Skills: own skills in `skills/<name>/SKILL.md` ([Agent Skills](https://agentskills.io/specification): name up
   to 64 characters, description up to 1024, body best under 500 lines). Third-party skills are recorded by source
-  only, in the `npx skills` project lock format (upstream and path), never copied.
+  in the `npx skills` project lock format (upstream and path), or vendored (see below).
+- Vendored third-party skills (`vendor = ["name"]`, each also in `skill_sources`): `npx skills experimental_install`
+  without a ref installs the upstream's latest version and rewrites the lock when the hash differs, and a local
+  edit is lost either way. A vendored skill is copied byte for byte from the local copy into `skills/<name>/`,
+  with `UPSTREAM.md` (source, URL, path, upstream tree from the global lock, local tree, modified) and
+  `UPSTREAM-LICENSE` (the upstream license, unchanged) inside the folder, so both travel wherever the folder is
+  copied, plus a machine-readable `vendor.json` at the root. It leaves `skills-lock.json`. Trees are git tree ids
+  (`git write-tree` of the folder), so "modified" is exact. The license is read from the licenses directory
+  (`[sources] licenses`, default `<state dir>/licenses`, one `<owner>-<repo>.LICENSE` per repository); a missing
+  one fails `check` and the build. `plugin vendor-diff --plugin <p> --skill <s>` (network) compares the local copy
+  with upstream HEAD, prints the diff and with `--write-license` saves the upstream license.
 - `agent-env-plugin.json`: name, version, visibility, the environment variable names it needs (never values).
 - Packaging: the Claude Code plugin layout (`.claude-plugin/plugin.json` and a one-plugin `marketplace.json`,
   which Claude Code, Codex, Grok Build and Copilot install directly), plus `.cursor-plugin/plugin.json` and the
@@ -113,7 +123,8 @@ the output alone (`result=failed`).
 
 A cloud-hosted target gets `plugin pointer --target <id>`: at most 400 characters by default telling it which repositories
 to pull, in order, how to get their skills, and what to do when a pull fails. Skills in a repository's `skills/`
-are read in place; when a plugin of the pointer has third-party skills, the pointer also says to run
+are read in place (a vendored skill is copied as a whole folder, with its provenance and license); when a plugin
+of the pointer still has third-party skills in a lock file, the pointer also says to run
 `npx -y skills experimental_install` in each repository that has a `skills-lock.json` and read `.agents/skills/`,
 falling back to fetching each skill's `sourceUrl` + `skillPath` with git, and to report which way was used. The user pastes it into the bot's memory; after the user
 confirms, `--record` stores its hash, and doctor reports drift when the plugin list or a repository changes.

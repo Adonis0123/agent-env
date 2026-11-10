@@ -18,6 +18,7 @@ import agent_env  # noqa: E402
 import habits  # noqa: E402
 import habits_check  # noqa: E402
 import plugins  # noqa: E402
+import vendor  # noqa: E402
 from test_agent_env import Base, toml_value  # noqa: E402
 
 REPO = Path(__file__).resolve().parent.parent
@@ -231,8 +232,19 @@ class PrivacyTests(PluginBase):
     def test_guard_hits(self):
         self.assertIn("绝对家目录路径", self.hits_for("public", "see /Users/you/notes\n"))
         self.assertIn("绝对家目录路径", self.hits_for("personal", "cd /home/alice/x\n"))
-        self.assertIn("邮箱", self.hits_for("public", "mail bob@example.com\n"))
+        self.assertIn("邮箱", self.hits_for("public", "mail bob@mailhost.io\n"))
         self.assertIn("疑似密钥", self.hits_for("personal", "token ghp_" + "a" * 36 + "\n"))
+
+    def test_reserved_example_domains_are_not_emails(self):
+        for ok in ("bob@example.com", "a.b+c@EXAMPLE.org", "x@example.net", "x@corp.example", "x@ci.test",
+                   "x@nobody.invalid", "x@dev.localhost"):
+            self.assertFalse(plugins.real_email(f"mail {ok} now"), ok)
+            self.assertNotIn("邮箱", self.hits_for("public", f"mail {ok}\n"), ok)
+        for bad in ("foo@examples.com", "foo@example.com.cn", "foo@mail.example.com", "foo@example.co",
+                    "foo@test.com", "foo@invalid.org", "foo@localhost.dev", "foo@example.io"):
+            self.assertTrue(plugins.real_email(f"mail {bad} now"), bad)
+            self.assertIn("邮箱", self.hits_for("public", f"mail {bad}\n"), bad)
+        self.assertTrue(plugins.real_email("x@example.com and bob@mailhost.io"))  # one real address is enough
 
     def test_company_scans_secrets_only_and_local_scans_nothing(self):
         self.assertEqual(self.hits_for("company", "mail bob@example.com /Users/you\n"), "")
@@ -603,6 +615,197 @@ const h = createHash("sha256"); for (const f of fs) { h.update(f.r); h.update(f.
 """
         node = subprocess.run(["node", "--input-type=module", "-e", js, str(d)], capture_output=True, text=True, check=True)
         self.assertEqual(plugins.skill_folder_hash(d), node.stdout.strip())
+
+
+MIT = "MIT License\n\nCopyright (c) 2025 Someone\n\nPermission is hereby granted, free of charge...\n"
+
+
+class VendorTests(PluginBase):
+    """Vendored third-party skills (plugin `vendor`, engine/vendor.py): copied from the local copy with
+    their provenance and upstream license, left out of skills-lock.json and the npx pointer step."""
+
+    def setUp(self):
+        super().setUp()
+        (self.skills / "third" / "scripts").mkdir()
+        (self.skills / "third" / "scripts" / "run.sh").write_text("echo hi\n", encoding="utf-8")
+        os.chmod(self.skills / "third" / "scripts" / "run.sh", 0o755)
+        self.skill("other", "Another upstream skill.")
+        self.upstream_tree = self.git_tree(self.skills / "third")
+        self.write_lock()
+        self.licenses = plugins.state_dir() / "licenses"
+        self.licenses.mkdir(parents=True)
+        (self.licenses / "someone-skills.LICENSE").write_text(MIT, encoding="utf-8")
+
+    def write_lock(self, third_url="https://github.com/someone/skills.git"):
+        entry = lambda n, url, h: {"source": "someone/skills", "sourceType": "github", "sourceUrl": url,
+                                   "skillPath": f"skills/{n}/SKILL.md", "skillFolderHash": h, "installedAt": "x"}
+        self.lock.write_text(json.dumps({"version": 3, "skills": {
+            "third": entry("third", third_url, self.upstream_tree),
+            "other": entry("other", "https://github.com/someone/skills.git", "0" * 40)}}), encoding="utf-8")
+
+    @staticmethod
+    def git_tree(d: Path) -> str:
+        """`git write-tree` of a folder: the reference for vendor.tree_sha."""
+        work = Path(d).parent / f".{Path(d).name}-git"
+        shutil.copytree(d, work / "x")
+        g = lambda *a: subprocess.run(["git", *a], cwd=work / "x", capture_output=True, text=True, check=True).stdout
+        g("init", "-q")
+        g("add", "-A")
+        tree = g("write-tree").strip()
+        shutil.rmtree(work)
+        return tree
+
+    def spec(self, **extra):
+        return {**PUBLIC, "skill_sources": ["third", "other"], "vendor": ["third"], **extra}
+
+    def test_tree_sha_equals_git_write_tree(self):
+        d = self.skills / "third"
+        files = {rel: ((d / rel).read_bytes(), bool((d / rel).stat().st_mode & 0o111)) for rel in plugins.skill_copy(d)[0]}
+        self.assertEqual(vendor.tree_sha(files), self.git_tree(d))
+        files["a-b/c.md"] = (b"x", False)
+        files["a.md"] = (b"y", False)
+        files["a/b.md"] = (b"z", True)
+        nested = self.skills / "nested"
+        for rel, (data, exe) in files.items():
+            (nested / rel).parent.mkdir(parents=True, exist_ok=True)
+            (nested / rel).write_bytes(data)
+            os.chmod(nested / rel, 0o755 if exe else 0o644)
+        self.assertEqual(vendor.tree_sha(files), self.git_tree(nested))
+
+    def test_copy_license_provenance_and_lock(self):
+        m = self.setup({"pub": self.spec(), "per": PERSONAL})
+        self.assertEqual(self.fails(), [])
+        files = plugins.render_plugin(m, "pub", self.rules())
+        for rel in ("SKILL.md", "scripts/run.sh"):
+            self.assertEqual(files[f"skills/third/{rel}"][0], (self.skills / "third" / rel).read_bytes())
+        self.assertTrue(files["skills/third/scripts/run.sh"][1])
+        self.assertEqual(files["skills/third/UPSTREAM-LICENSE"][0].decode(), MIT)
+        index = json.loads(files["vendor.json"][0])
+        self.assertEqual(index, {"version": 1, "skills": {"third": {
+            "source": "someone/skills", "sourceUrl": "https://github.com/someone/skills.git",
+            "skillPath": "skills/third/SKILL.md", "upstreamTree": self.upstream_tree, "localTree": self.upstream_tree,
+            "modified": False, "license": "skills/third/UPSTREAM-LICENSE"}}})
+        md = files["skills/third/UPSTREAM.md"][0].decode()
+        for part in ("someone/skills", "Path: skills/third", self.upstream_tree, "Modified locally: no", "UPSTREAM-LICENSE"):
+            self.assertIn(part, md)
+        lock = json.loads(files["skills-lock.json"][0])
+        self.assertEqual(list(lock["skills"]), ["other"])  # the vendored one is not installed through npx
+        meta = json.loads(files["agent-env-plugin.json"][0])
+        self.assertEqual((meta["skill_sources"], meta["vendor"]), (["third", "other"], ["third"]))
+        self.assertNotIn("skills/other/SKILL.md", files)
+
+    def test_local_edit_is_marked_modified(self):
+        m = self.setup({"pub": self.spec(), "per": PERSONAL})
+        with open(self.skills / "third" / "SKILL.md", "a", encoding="utf-8") as fh:
+            fh.write("my own line\n")
+        files = plugins.render_plugin(m, "pub", self.rules())
+        rec = json.loads(files["vendor.json"][0])["skills"]["third"]
+        self.assertTrue(rec["modified"])
+        self.assertEqual(rec["localTree"], self.git_tree(self.skills / "third"))
+        self.assertIn("Modified locally: yes", files["skills/third/UPSTREAM.md"][0].decode())
+
+    def test_all_vendored_means_no_lock_and_no_npx_step(self):
+        url = "https://github.com/someone/agent-public"
+        m = self.setup({"pub": self.spec(repo=url, skill_sources=["third"]), "per": PERSONAL}, [self.bot(["pub"])])
+        files = plugins.render_plugin(m, "pub", self.rules())
+        self.assertNotIn("skills-lock.json", files)
+        text = plugins.pointer_text(m, habits.find_target(m, "cloud/bot"))
+        self.assertIn("skills/ 直接读，要装就整个目录复制（含 UPSTREAM 出处和许可）", text)
+        self.assertNotIn("npx", text)
+        self.assertNotIn("skills-lock.json", text)
+        self.assertLessEqual(len(text.rstrip("\n")), 400)
+        m = self.setup({"pub": self.spec(repo=url), "per": PERSONAL}, [self.bot(["pub"])])
+        text = plugins.pointer_text(m, habits.find_target(m, "cloud/bot"))
+        self.assertIn("整个目录复制", text)
+        self.assertIn("npx -y skills experimental_install", text)  # "other" is still in the lock
+        self.assertLessEqual(len(text.rstrip("\n")), 400)
+
+    def test_byte_stable(self):
+        m = self.setup({"pub": self.spec(), "per": PERSONAL})
+        self.assertEqual(plugins.render_plugin(m, "pub", self.rules()), plugins.render_plugin(m, "pub", self.rules()))
+        self.assertEqual(agent_env.main(["plugin", "build", "--manifest", str(self.manifest), "--plugin", "pub"],
+                                        out=io.StringIO()), 0)
+        first = plugins.tree_files(plugins.output_dir(m, "pub"))
+        out = io.StringIO()
+        agent_env.main(["plugin", "build", "--manifest", str(self.manifest), "--plugin", "pub"], out=out)
+        self.assertIn("已是最新，未写入", out.getvalue())
+        self.assertEqual(plugins.tree_files(plugins.output_dir(m, "pub")), first)
+
+    def test_missing_license_fails_with_a_fix(self):
+        (self.licenses / "someone-skills.LICENSE").unlink()
+        m = self.setup({"pub": self.spec(), "per": PERSONAL})
+        results = [r for r in habits_check.run_checks(self.manifest).results if r["level"] == "FAIL"]
+        self.assertTrue(any("缺上游许可" in r["message"] and "someone-skills.LICENSE" in r["message"]
+                            and "vendor-diff --plugin pub --skill third --write-license" in r["fix"] for r in results), results)
+        with self.assertRaisesRegex(plugins.PluginError, "缺上游许可.*修复"):
+            plugins.render_plugin(m, "pub", self.rules())
+        err = io.StringIO()
+        self.assertNotEqual(agent_env.main(["plugin", "build", "--manifest", str(self.manifest), "--plugin", "pub"],
+                                           out=io.StringIO(), err=err), 0)
+
+    def test_licenses_dir_from_sources(self):
+        other = self.root / "my-licenses"
+        other.mkdir()
+        (other / "someone-skills.LICENSE").write_text("other text\n", encoding="utf-8")
+        self.setup({"pub": self.spec(), "per": PERSONAL})
+        self.manifest.write_text(self.manifest.read_text().replace("[sources]\n", f'[sources]\nlicenses = "{other}"\n', 1))
+        m = habits.load_manifest(self.manifest)
+        self.assertEqual(plugins.render_plugin(m, "pub", self.rules())["skills/third/UPSTREAM-LICENSE"][0], b"other text\n")
+
+    def test_vendor_must_be_a_skill_source_and_not_clash(self):
+        self.setup({"pub": self.spec(vendor=["third", "ghost"]), "per": PERSONAL})
+        self.assertTrue(any("不在 skill_sources" in f for f in self.fails()))
+        (self.skills / "third" / "UPSTREAM.md").write_text("mine\n", encoding="utf-8")
+        self.setup({"pub": self.spec(), "per": PERSONAL})
+        self.assertTrue(any("和生成的出处文件重名" in f for f in self.fails()))
+
+    def test_outside_path_in_a_vendored_skill_is_a_note_not_a_refusal(self):
+        (self.skills / "third" / "SKILL.md").write_text("---\nname: third\ndescription: x\n---\nsee `docs/design.md`\n",
+                                                       encoding="utf-8")
+        m = self.setup({"pub": self.spec(), "per": PERSONAL})
+        files = plugins.render_plugin(m, "pub", self.rules())  # upstream text: not refused
+        notes = plugins.outside_notes("pub", "public", files)
+        self.assertTrue(any("第三方 skill" in n and "docs/design.md" in n for n in notes), notes)
+        self.skill("own-skill", "Does its own thing.", body="see `docs/design.md`\n")
+        with self.assertRaisesRegex(plugins.PluginError, "指向插件外的文件"):  # an own skill still is
+            plugins.render_plugin(m, "pub", self.rules())
+
+    def test_local_change_shows_drift(self):
+        from expect import plugins as expect_plugins
+        m = self.setup({"pub": self.spec(), "per": PERSONAL})
+        agent_env.main(["plugin", "build", "--manifest", str(self.manifest), "--plugin", "pub"], out=io.StringIO())
+        self.assertEqual(expect_plugins.plugin_cell(m, "pub", self.rules())["state"], "synced")
+        (self.skills / "third" / "SKILL.md").write_text("---\nname: third\ndescription: changed\n---\nnew\n", encoding="utf-8")
+        c = expect_plugins.plugin_cell(m, "pub", self.rules())
+        self.assertEqual(c["state"], "drift")
+        self.assertIn("更新 3 个文件", c["detail"] if "detail" in c else json.dumps(c, ensure_ascii=False))
+
+    def test_vendor_diff_against_upstream_head(self):
+        up = self.root / "upstream"
+        (up / "skills" / "third" / "scripts").mkdir(parents=True)
+        for rel in ("SKILL.md", "scripts/run.sh"):
+            shutil.copy2(self.skills / "third" / rel, up / "skills" / "third" / rel)
+        (up / "LICENSE").write_text("Upstream MIT\n", encoding="utf-8")
+        g = lambda *a: subprocess.run(["git", "-c", "user.name=t", "-c", "user.email=t@example.invalid", *a],
+                                      cwd=up, capture_output=True, text=True, check=True)
+        g("init", "-q")
+        g("add", "-A")
+        g("commit", "-qm", "init")
+        self.write_lock(third_url=str(up))
+        (self.licenses / "someone-skills.LICENSE").unlink()
+        self.setup({"pub": self.spec(), "per": PERSONAL})
+        args = ["plugin", "vendor-diff", "--manifest", str(self.manifest), "--plugin", "pub", "--skill", "third"]
+        out = io.StringIO()
+        self.assertEqual(agent_env.main(args + ["--write-license"], out=out), 0, out.getvalue())
+        self.assertIn("无需更新", out.getvalue())
+        self.assertEqual((self.licenses / "someone-skills.LICENSE").read_text(), "Upstream MIT\n")
+        with open(self.skills / "third" / "SKILL.md", "a", encoding="utf-8") as fh:
+            fh.write("my own line\n")
+        out = io.StringIO()
+        self.assertEqual(agent_env.main(args, out=out), 1)
+        self.assertIn("+my own line", out.getvalue())
+        self.assertIn("本机副本改过", out.getvalue())
+        self.assertNotIn("agent-env-vendor-", out.getvalue())  # the temporary clone's path is not shown
 
 
 if __name__ == "__main__":
