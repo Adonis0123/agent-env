@@ -1,0 +1,22 @@
+#!/usr/bin/env bash
+# agent-env: habit distribution engine entry (engine/agent_env.py).
+#
+#   agent-env check                     validate the manifest
+#   agent-env render --target <id> [--check|--write]
+#   agent-env doctor [--env <name>] [--json]
+#   agent-env status --json [--all] [--fetch] [--commit [--push]]
+#   agent-env rollback [--target <id>]
+#   agent-env deliver --target <id> [--record | --dry-run | --yes]
+#   agent-env eval [--target <id>] [--repeat N] [--json]
+#   agent-env promote scan|propose
+#   agent-env plugin build|publish (--plugin <name> | --all) [--yes] | plugin pointer --target <id> [--record]
+set -uo pipefail
+
+ROOT=$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}" 2>/dev/null || echo "${BASH_SOURCE[0]}")")/.." && pwd)
+
+case ${1:-} in
+  -h|--help|'') sed -n '2,12p' "$0"; [ -n "${1:-}" ]; exit $? ;;
+esac
+
+PY=${AGENT_ENV_PYTHON:-python3}
+exec "$PY" "$ROOT/engine/agent_env.py" "$@"

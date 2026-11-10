@@ -1,0 +1,93 @@
+{
+  "version": 1,
+  "tools": {
+    "env": {
+      "skill": "agent-env",
+      "skillInstall": null,
+      "cwd": "~/coding/agent-env",
+      "contribute": null,
+      "presets": [
+        {
+          "id": "fix-drift",
+          "title": {
+            "en": "Let AI fix it",
+            "zh": "让 AI 修复"
+          },
+          "what": {
+            "en": "Fix the problems listed below and see them through. Before anything that writes, show me the dry run and wait for my yes. At a step only I can do, stop, tell me exactly what to do, and go on when I say it is done.",
+            "zh": "修好下面列出的问题，做到底。会写入的步骤先给我看演练结果，等我同意再执行；只有我能做的那一步，停下来告诉我具体做什么，我说做完了你再接着做。"
+          },
+          "placeholder": {
+            "en": "Anything to add? You can leave this empty",
+            "zh": "还有要补充的吗？可以不填"
+          },
+          "examples": [],
+          "pointers": {
+            "en": "Each fact is one problem from the Environments panel as JSON (id, env, target, title_zh, steps, ai_task, ref); handle them one at a time and follow each one's steps. A step with confirm: true is a write: show me its dry run (or, when there is none, exactly what you will change) and wait for my yes before running it for real. A step with who: user is mine alone (pasting into an app, logging in, supplying a repository): do every step before it, then stop, give me what I need for it (show the text and copy it to the clipboard when you can), say where and what to do, and go on with the later steps only after I tell you it is done. When a step says to stop (a precondition is not met, or something changed), stop there and report; do not skip ahead. For a host upgrade, check the vendor's own release notes or documentation online and test on the machine, as section 3 of the agent-env skill describes. Run `bin/agent-env status --json --all` first and work from its current output, not only the list below. Each cell's `fix` is a command or a one-line remedy. Show me each command before running it. When done, run the status again and tell me which cells are still drift or missing.",
+            "zh": "每条事实是面板里的一个问题（JSON：id、env、target、title_zh、steps、ai_task、ref），逐条处理，按它的 steps 做；confirm 为 true 的步骤是写操作：先给我看演练结果（没有演练就给我看具体要改什么），等我同意再正式执行。who 为 user 的步骤只有我能做（在 app 里粘贴、登录、提供仓库地址）：先做完它前面的步骤，然后停下，把这一步要用的内容给我（显示全文，能复制到剪贴板就复制），说清在哪里做、做什么，等我回复做完了再接着做后面的步骤。步骤里写了要停下的（前置条件没满足，或发现有变化），就停在那里报告，不要跳过。宿主升级按 agent-env skill 第 3 节的做法核对：联网查厂商自己的发布说明或文档，再在那台机器上实测。先运行 `bin/agent-env status --json --all`，以它当前的输出为准，不只看下面的列表。每格的 `fix` 是一条命令或一句修法。每条命令运行前先给我看。做完再跑一次 status，告诉我还有哪些格是漂移或缺失。"
+          }
+        },
+        {
+          "id": "prepare-step",
+          "title": {
+            "en": "Let AI prepare it",
+            "zh": "让 AI 准备"
+          },
+          "what": {
+            "en": "Prepare the problem below for me to finish: do the steps marked who: ai, run write commands only as a dry run, and tell me exactly what I need to do or confirm, and where.",
+            "zh": "把下面这个问题准备好，留给我收尾：做 who 为 ai 的步骤，写操作只跑演练（dry run），然后告诉我具体要做什么、确认什么、在哪里做。"
+          },
+          "placeholder": {
+            "en": "Anything to add? You can leave this empty",
+            "zh": "还有要补充的吗？可以不填"
+          },
+          "examples": [],
+          "pointers": {
+            "en": "The fact is one issue from `bin/agent-env status --json --all`; run that first and work from its current output. Never run `--yes` or anything that writes to another machine or a cloud app; that step is mine after I have seen the dry run. For a step on another machine, give me the one command to run there.",
+            "zh": "事实是 `bin/agent-env status --json --all` 里的一条 issue；先跑一次它，以当前输出为准。不要执行 `--yes` 或任何会写到另一台机器、云端 app 的操作，那一步等我看过演练后自己确认。要在另一台机器上做的步骤，给我在那台机器上跑的一条命令。"
+          }
+        },
+        {
+          "id": "check-logs",
+          "title": {
+            "en": "Let AI read the logs",
+            "zh": "让 AI 查日志"
+          },
+          "what": {
+            "en": "Find out why the check below did not produce a result: read its logs, say whether the agent or the checker is at fault, and suggest the fix. Do not change anything yet.",
+            "zh": "查清下面这个检查为什么没出结果：读它的日志，判断是 agent 的问题还是检查工具自己的问题，给出修法。先不要改任何东西。"
+          },
+          "placeholder": {
+            "en": "Anything to add? You can leave this empty",
+            "zh": "还有要补充的吗？可以不填"
+          },
+          "examples": [],
+          "pointers": {
+            "en": "Spot-check results and log paths are in `bin/agent-env status --json --all` under `eval.results[].detail`; runs are under `~/.local/state/agent-env/eval/`. You may re-run the one spot-check named in the fact with `bin/agent-env eval`.",
+            "zh": "抽测结果和日志路径在 `bin/agent-env status --json --all` 的 `eval.results[].detail` 里；运行记录在 `~/.local/state/agent-env/eval/`。可以用 `bin/agent-env eval` 重跑事实里点名的那个抽测。"
+          }
+        },
+        {
+          "id": "adjust-plugins",
+          "title": {
+            "en": "Let AI adjust plugins",
+            "zh": "让 AI 调整插件"
+          },
+          "what": {
+            "en": "Change which plugins each environment gets, as I describe below. Edit only the `plugins` lists of the manifest's targets, and only within what each environment allows. Show me the diff before writing.",
+            "zh": "按我下面说的，调整每个环境拿到哪些插件。只改清单里各落点的 `plugins`，只在每个环境允许的范围内改；写入前先给我看改动。"
+          },
+          "placeholder": {
+            "en": "Which environment should get or drop which plugin?",
+            "zh": "哪个环境要加上或去掉哪个插件？"
+          },
+          "examples": [],
+          "pointers": {
+            "en": "The fact is the Plugins tab as JSON: every plugin with its visibility, and per environment its deny_visibility, mode and each target's plugins. Work in manifest/habits.toml of ~/coding/agent-env. Change only `plugins = [...]` of [[targets]]; never add a plugin whose visibility is in that environment's deny_visibility (Grok Bot denies company), and keep local plugins last. Do not add or remove [plugins.*], change a plugin's visibility or repo, or touch [environments]: if what I ask needs that, stop and tell me. An environment in mode legacy has no plugins yet; moving it onto plugins is a later phase, so ask before attaching any. Show the diff and wait for my yes before writing. After writing, run `bin/agent-env check` and `bin/agent-env status --json --all`, and tell me what each environment now gets. Do not build, publish, push or deliver anything.",
+            "zh": "事实是「插件」标签的 JSON：每个插件和它的可见性，每个环境的 deny_visibility、mode 和各落点挂的插件。在 ~/coding/agent-env 的 manifest/habits.toml 里改。只改 [[targets]] 的 `plugins = [...]`；不许给环境挂它 deny_visibility 里的可见性的插件（Grok Bot 禁止公司插件），本机插件放最后。不新增或删除 [plugins.*]，不改插件的 visibility 或 repo，不动 [environments]：我要的改动需要这些就停下告诉我。mode 为 legacy 的环境还没改成插件，改过去是后面的阶段，挂插件前先问我。写入前给我看改动，等我同意。写完跑 `bin/agent-env check` 和 `bin/agent-env status --json --all`，告诉我每个环境现在拿到什么。不要生成、发布、推送或投递任何东西。"
+          }
+        }
+      ]
+    }
+  }
+}

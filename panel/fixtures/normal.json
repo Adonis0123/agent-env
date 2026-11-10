@@ -1,0 +1,274 @@
+{
+  "schema": 1,
+  "generated_at": "2026-11-09T08:00:00Z",
+  "environments": [
+    {
+      "schema": 1,
+      "env": "mac",
+      "source": "live",
+      "generated_at": "2026-11-09T07:30:00Z",
+      "engine_rev": "ae84677",
+      "summary": {
+        "synced": 12,
+        "customized": 2,
+        "drift": 0,
+        "missing": 0,
+        "unknown": 0
+      },
+      "check": {
+        "pass": 51,
+        "warn": 0,
+        "fail": 0
+      },
+      "targets": [
+        {
+          "id": "mac/claude",
+          "host": "claude",
+          "env": "mac",
+          "roles": [
+            "coding-cli"
+          ],
+          "verified": true,
+          "host_version": {
+            "recorded": "2.1.0",
+            "current": "2.1.0",
+            "changed": false
+          },
+          "habits": [
+            {
+              "kind": "rules",
+              "name": "AGENTS.md",
+              "state": "synced",
+              "layer": "safety",
+              "detail": "Matches the source",
+              "fix": ""
+            },
+            {
+              "kind": "rules",
+              "name": "docs/browser-verification.md",
+              "state": "customized",
+              "layer": "env",
+              "detail": "WSL variant drops the macOS-only sections",
+              "fix": ""
+            },
+            {
+              "kind": "skills",
+              "name": "ego-browser",
+              "state": "synced",
+              "layer": "safety",
+              "detail": "Matches the source",
+              "fix": ""
+            },
+            {
+              "kind": "skills",
+              "name": "example-skill",
+              "state": "synced",
+              "layer": "safety",
+              "detail": "Matches the source",
+              "fix": ""
+            },
+            {
+              "kind": "hooks",
+              "name": "delete-guard",
+              "state": "synced",
+              "layer": "safety",
+              "detail": "Matches the source",
+              "fix": ""
+            },
+            {
+              "kind": "hooks",
+              "name": "bash-prompt-guard",
+              "state": "synced",
+              "layer": "safety",
+              "detail": "Matches the source",
+              "fix": ""
+            },
+            {
+              "kind": "mcp",
+              "name": "deepwiki",
+              "state": "synced",
+              "layer": "safety",
+              "detail": "Variables: none; host mcp.deepwiki.com",
+              "fix": ""
+            }
+          ]
+        },
+        {
+          "id": "mac/codex",
+          "host": "codex",
+          "env": "mac",
+          "roles": [
+            "coding-cli"
+          ],
+          "verified": true,
+          "host_version": {
+            "recorded": "2.1.0",
+            "current": "2.1.0",
+            "changed": false
+          },
+          "habits": [
+            {
+              "kind": "rules",
+              "name": "AGENTS.md",
+              "state": "synced",
+              "layer": "safety",
+              "detail": "Matches the source",
+              "fix": ""
+            },
+            {
+              "kind": "rules",
+              "name": "docs/browser-verification.md",
+              "state": "customized",
+              "layer": "env",
+              "detail": "WSL variant drops the macOS-only sections",
+              "fix": ""
+            },
+            {
+              "kind": "skills",
+              "name": "ego-browser",
+              "state": "synced",
+              "layer": "safety",
+              "detail": "Matches the source",
+              "fix": ""
+            },
+            {
+              "kind": "skills",
+              "name": "example-skill",
+              "state": "synced",
+              "layer": "safety",
+              "detail": "Matches the source",
+              "fix": ""
+            },
+            {
+              "kind": "hooks",
+              "name": "delete-guard",
+              "state": "synced",
+              "layer": "safety",
+              "detail": "Matches the source",
+              "fix": ""
+            },
+            {
+              "kind": "hooks",
+              "name": "bash-prompt-guard",
+              "state": "synced",
+              "layer": "safety",
+              "detail": "Matches the source",
+              "fix": ""
+            },
+            {
+              "kind": "mcp",
+              "name": "deepwiki",
+              "state": "synced",
+              "layer": "safety",
+              "detail": "Variables: none; host mcp.deepwiki.com",
+              "fix": ""
+            }
+          ]
+        }
+      ],
+      "eval": {
+        "ran_at": null,
+        "results": []
+      }
+    },
+    {
+      "schema": 1,
+      "env": "wsl",
+      "source": "branch",
+      "generated_at": "2026-11-08T22:10:00Z",
+      "engine_rev": "ae84677",
+      "summary": {
+        "synced": 6,
+        "customized": 1,
+        "drift": 0,
+        "missing": 0,
+        "unknown": 0
+      },
+      "check": {
+        "pass": 51,
+        "warn": 0,
+        "fail": 0
+      },
+      "targets": [
+        {
+          "id": "wsl/claude",
+          "host": "claude",
+          "env": "wsl",
+          "roles": [
+            "coding-cli"
+          ],
+          "verified": true,
+          "host_version": {
+            "recorded": "2.1.0",
+            "current": "2.1.0",
+            "changed": false
+          },
+          "habits": [
+            {
+              "kind": "rules",
+              "name": "AGENTS.md",
+              "state": "synced",
+              "layer": "safety",
+              "detail": "Matches the source",
+              "fix": ""
+            },
+            {
+              "kind": "rules",
+              "name": "docs/browser-verification.md",
+              "state": "customized",
+              "layer": "env",
+              "detail": "WSL variant drops the macOS-only sections",
+              "fix": ""
+            },
+            {
+              "kind": "skills",
+              "name": "ego-browser",
+              "state": "synced",
+              "layer": "safety",
+              "detail": "Matches the source",
+              "fix": ""
+            },
+            {
+              "kind": "skills",
+              "name": "example-skill",
+              "state": "synced",
+              "layer": "safety",
+              "detail": "Matches the source",
+              "fix": ""
+            },
+            {
+              "kind": "hooks",
+              "name": "delete-guard",
+              "state": "synced",
+              "layer": "safety",
+              "detail": "Matches the source",
+              "fix": ""
+            },
+            {
+              "kind": "hooks",
+              "name": "bash-prompt-guard",
+              "state": "synced",
+              "layer": "safety",
+              "detail": "Matches the source",
+              "fix": ""
+            },
+            {
+              "kind": "mcp",
+              "name": "deepwiki",
+              "state": "synced",
+              "layer": "safety",
+              "detail": "Variables: none; host mcp.deepwiki.com",
+              "fix": ""
+            }
+          ]
+        }
+      ],
+      "eval": {
+        "ran_at": null,
+        "results": []
+      }
+    }
+  ],
+  "errors": [],
+  "issues": []
+}

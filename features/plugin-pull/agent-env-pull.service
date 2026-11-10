@@ -1,0 +1,12 @@
+# agent-env: pull this host's plugins and join their rules (installed by bin/agent-env deliver).
+[Unit]
+Description=agent-env: pull plugins and join their rules
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=%h/.local/bin/agent-env-pull
+Environment=PATH=%h/.local/bin:/usr/local/bin:/usr/bin:/bin
+TimeoutStartSec=600
+Nice=10

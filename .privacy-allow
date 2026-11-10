@@ -1,0 +1,6 @@
+# Narrow allows for known false positives of a privacy scan (one regex per line; matched against the hit or
+# "<path>:<line>"). Keep every line generic.
+# Placeholder users in examples and tests, the same ones .gitleaks.toml allows.
+^/Users/(?:(?:you|me|user|username|name)\b|<[^>]*>)
+# Engine constants named LOCAL (the "local" visibility), not *.local hostnames.
+^(?:plugins|source)\.LOCAL$

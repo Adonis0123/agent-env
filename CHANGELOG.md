@@ -1,0 +1,30 @@
+# Changelog
+
+All notable changes to this project are listed here. Versions follow [Semantic Versioning](https://semver.org/).
+
+## [0.1.0] - 2026-11-10
+
+First public release: the engine, split from a private setup that runs it on macOS, WSL, a Linux server and a
+cloud-hosted bot.
+
+### Added
+
+- `bin/agent-env` with `check`, `render`, `doctor`, `status`, `rollback`, `deliver`, `eval`, `skills`, `promote`
+  and `plugin` (`build`, `publish`, `pointer`, `repos`).
+- Plugins with a visibility (public, personal, company, local): Claude Code plugin layout plus Cursor and pi
+  manifests, own skills copied, third-party skills recorded by source, byte-stable builds, a resumable publish
+  ledger, and a dry run before every push.
+- Three ways a target gets its plugins: composed on the user's own machines (`rules_output`), pulled on a timer
+  by a remote host (`pull`, `features/plugin-pull/`), or pulled by a cloud-hosted bot from a pointer rule.
+- Privacy guard for public and personal plugins: gitleaks, the engine's own secret rules, home paths in every
+  spelling, emails, credential files, and paths that point outside the plugin.
+- Doctor expectations: `link`, `contains`, `generated`, `composed`, `plugins`, `pulled`, `delivered`, `token`,
+  `service`, `login`, `broken-links`, `secrets`, `company-skills`, `portal`, plus MCP and host-version checks.
+- The Environments panel (`panel/`): to-dos, per-machine view, matrix, relation graph and plugins tab.
+- The runbook skill `skills/agent-env/`, the new-environment template `profiles/_template/`, and a demo
+  personal layer `examples/demo/`.
+- `engine/overlay.py`: the engine finds the personal repository that vendors it (nearest `manifest/habits.toml`).
+- `[git_hosts."<host>"]` in the manifest: how to ask a host other than github.com whether a repository is public.
+- `[environments.<env>] sync_command`: an environment whose own sync writes its composed rules file.
+
+[0.1.0]: https://github.com/Adonis0123/agent-env/releases/tag/v0.1.0

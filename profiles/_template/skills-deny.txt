@@ -1,0 +1,7 @@
+# 本环境关闭的共享 skill（来自 ~/.agents/skills），一行一个，# 后写原因。
+# 其余 skill 默认全部启用，所以 Mac 上新加的 skill 会自动出现。
+# 只列在这台机器上用不了的 skill，比如依赖 macOS 应用或本机绝对路径的。
+# 各宿主怎么落地见 README.md「skill」一节。
+
+# desktop-arranger   # 例：重排 macOS 桌面，依赖 Mac 专属路径
+# kimi-computer-use  # 例：安装 macOS 版 .app

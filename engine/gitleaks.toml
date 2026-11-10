@@ -1,0 +1,7 @@
+# gitleaks config for scanning a staged plugin directory (engine/plugins.py, gitleaks_hits).
+# The default rules only; passing this file pins the scan, so a GITLEAKS_CONFIG in the environment or
+# a .gitleaks.toml inside the scanned content cannot switch rules off. Keep it generic: no names here.
+title = "agent-env plugin scan"
+
+[extend]
+useDefault = true

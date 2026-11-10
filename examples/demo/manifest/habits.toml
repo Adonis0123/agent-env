@@ -1,0 +1,293 @@
+# Demo manifest: the personal layer of a made-up user with four environments.
+#   mac        the user's laptop (macOS): Claude Code, Codex, pi and a Hermes chat bot
+#   wsl        a Windows machine's WSL (Linux): Claude Code and Codex; its own sync writes the composed rules
+#   vps-helper a team server reached over ssh (remote-exec): a Hermes bot that pulls its plugins on a timer
+#   grok-bot   a cloud-hosted chat bot (cloud-hosted): it pulls the public plugin itself, from a pointer rule
+# Every name, path and repository here is fictional. Paths that start with ../ are relative to this file.
+# Try it from the repository root (see README.md "Quick start"):
+#   bin/agent-env check --manifest examples/demo/manifest/habits.toml
+
+schema = 1
+roles = ["cli", "bot", "cron", "remote"]
+visibility = ["public", "private"]
+plugin_owner = "example-user" # author name in the generated .claude-plugin/*.json; never an email
+
+[sources]
+rules_src = "../sources/agents-md" # where rules are edited: public.md, personal.md, local.md (one file per owner)
+rules = "~/.claude/AGENTS.md"      # the full rules as the hosts read them (mac/claude-code composes it)
+docs = "../sources/docs"
+hooks = "../sources/hooks"
+skills = "../sources/skills"                  # own skills, copied into plugins that list them
+company_skills = "../sources/company-skills"  # company skills: only company and local plugins may carry them
+
+# ── environments ─────────────────────────────────────
+# A local environment is detected by platform (sys.platform prefix) and wsl; the others are named with --env.
+[environments.mac]
+platform = "darwin"
+
+[environments.wsl]
+platform = "linux"
+wsl = true
+sync_command = "env-sync run" # this machine's own sync writes ~/.claude/AGENTS.md from a clone of the rules source
+
+[environments.vps-helper]
+transport = "remote-exec"
+exec = ["sh", "../profiles/vps-helper/rc.sh"] # reads an sh script on stdin and runs it on the server
+remote_home = "/srv/helper"
+remote_user = "helper"
+deny_visibility = ["personal"] # a shared team server: no personal plugin
+
+[environments.grok-bot]
+transport = "cloud-hosted"
+driven_from = "mac"            # its checks run on the laptop and travel with the laptop's status
+deny_visibility = ["company"]  # no company content in a vendor's cloud
+
+# ── plugins ──────────────────────────────────────────
+# A plugin is a repository with a visibility: public, personal, company or local (the patch layer, never pushed).
+# sections are `## ` headings of the rules source ("__preamble__" is the text before the first heading).
+[plugins.demo-public]
+visibility = "public"
+repo = "https://github.com/example-user/agent-plugin-public"
+description = "Shared rules and a demo skill"
+sections = ["__preamble__", "Communication", "Safety"]
+skills = ["hello-world"]
+
+[plugins.demo-personal]
+visibility = "personal"
+repo = "https://github.com/example-user/agent-plugin-personal"
+description = "The demo user's own workflow"
+sections = ["Workflow"]
+
+[plugins.demo-company]
+visibility = "company"
+repo = "https://git.example.com/example-user/agent-plugin-company"
+description = "Rules and skills for the team server"
+sections = ["Workflow"]
+rules_file = "../profiles/vps-helper/hermes.md"
+company_skills = ["report-card"]
+
+[plugins.demo-mac]
+visibility = "local"
+description = "Patch layer of the laptop: its document index"
+sections = ["Local references"]
+
+[plugins.demo-wsl]
+visibility = "local"
+description = "Patch layer of the WSL machine: its document index"
+sections = ["Local references"]
+
+# How `plugin repos --refresh` asks a host other than github.com whether a repository is public.
+[git_hosts."git.example.com"]
+command = ["tool", "repo", "show", "{repo}"]
+visibility = '^\s*visibility:\s*"?([A-Za-z]+)'
+login = "tool login"
+
+# ── targets ──────────────────────────────────────────
+[[targets]]
+id = "mac/claude-code"
+eval_skip = "demo"
+host = "claude-code"
+env = "mac"
+roles = ["cli"]
+rule_limit_bytes = 0
+verified = true
+host_version = { cmd = ["claude", "--version"], recorded = "2.1.0" }
+plugins = ["demo-public", "demo-personal", "demo-mac"] # composed on this machine, later plugins append
+rules_output = "~/.claude/AGENTS.md"
+
+[[targets.expect]]
+kind = "contains"
+habit = "rules"
+name = "AGENTS.md"
+path = "~/.claude/CLAUDE.md"
+text = "@AGENTS.md"
+
+[[targets.expect]]
+kind = "composed"
+habit = "rules"
+name = "AGENTS.md 合成"
+
+[[targets.expect]]
+kind = "plugins"
+habit = "rules"
+
+[[targets]]
+id = "mac/codex"
+eval_skip = "demo"
+host = "codex"
+env = "mac"
+roles = ["cli"]
+rule_limit_bytes = 32768
+verified = true
+host_version = { cmd = ["codex", "--version"], recorded = "0.160.0" }
+
+[[targets.expect]]
+kind = "link"
+habit = "rules"
+name = "AGENTS.md"
+path = "~/.codex/AGENTS.md"
+to = "~/.claude/AGENTS.md"
+
+[[targets]]
+id = "mac/pi"
+eval_skip = "demo"
+host = "pi"
+env = "mac"
+roles = ["cli"]
+rule_limit_bytes = 0
+verified = true
+host_version = { cmd = ["pi", "--version"], recorded = "1.5.0" }
+
+[[targets.expect]]
+kind = "link"
+habit = "rules"
+name = "AGENTS.md"
+path = "~/.pi/agent/AGENTS.md"
+to = "~/.claude/AGENTS.md"
+
+[[targets]]
+id = "mac/hermes"
+eval_skip = "demo"
+host = "hermes"
+env = "mac"
+roles = ["bot", "cron"]
+rule_limit_bytes = 20000
+rule_limit_unit = "chars"
+verified = true
+render = "generated"                    # one file generated from the rules, picked by role
+supplement = "../profiles/mac/hermes.md" # the bot's own part, placed before the shared sections
+output = "~/.hermes.md"
+
+[[targets.expect]]
+kind = "generated"
+habit = "rules"
+name = ".hermes.md"
+
+[[targets]]
+id = "grok-bot/bot"
+display_name = "Grok Bot"
+eval_skip = "cloud-hosted: no local entry point"
+host = "grok-bot"
+env = "grok-bot"
+roles = ["remote"]
+rule_limit_bytes = 0
+verified = false
+plugins = ["demo-public"]
+pointer_limit_chars = 300 # the pointer rule the user pastes into the bot's memory
+
+[[targets.expect]]
+kind = "delivered"
+habit = "rules"
+name = "指路规则"
+
+[[targets.expect]]
+kind = "plugins"
+habit = "rules"
+
+[[targets.expect]]
+kind = "token"
+habit = "rules"
+name = "插件 token"
+
+[[targets]]
+id = "vps-helper/hermes"
+display_name = "小 helper"
+eval_skip = "remote: no local entry point"
+host = "hermes"
+env = "vps-helper"
+roles = ["bot", "cron"]
+rule_limit_bytes = 20000
+rule_limit_unit = "chars"
+verified = true
+plugins = ["demo-public", "demo-company"]
+pull = { dir = "~/.local/share/agent-env/plugins", output = "~/.hermes/workspace/AGENTS.md", skills_config = "~/.hermes/config.yaml" }
+
+[[targets.expect]]
+kind = "pulled"
+habit = "rules"
+name = "AGENTS.md"
+
+[[targets.expect]]
+kind = "plugins"
+habit = "rules"
+
+[[targets.expect]]
+kind = "service"
+habit = "rules"
+name = "网关 hermes-gateway"
+unit = "hermes-gateway"
+
+[[targets]]
+id = "wsl/claude-code"
+eval_skip = "demo"
+host = "claude-code"
+env = "wsl"
+roles = ["cli"]
+rule_limit_bytes = 0
+verified = true
+plugins = ["demo-public", "demo-personal", "demo-wsl"]
+rules_output = "~/.claude/AGENTS.md"
+
+[[targets.expect]]
+kind = "composed"
+habit = "rules"
+name = "AGENTS.md 合成"
+
+[[targets]]
+id = "wsl/codex"
+eval_skip = "demo"
+host = "codex"
+env = "wsl"
+roles = ["cli"]
+rule_limit_bytes = 32768
+verified = true
+
+[[targets.expect]]
+kind = "link"
+habit = "rules"
+name = "AGENTS.md"
+path = "~/.codex/AGENTS.md"
+to = "~/.claude/AGENTS.md"
+
+# ── display names (panel titles) ─────────────────────
+[host_names]
+"claude-code" = "Claude Code"
+codex = "Codex"
+pi = "Pi"
+hermes = "Hermes（小 bot）"
+"grok-bot" = "Grok Bot"
+
+[env_names]
+mac = "Mac"
+wsl = "WSL"
+"vps-helper" = "小 helper的云主机"
+"grok-bot" = "Grok Bot"
+
+# ── rules sections: every `## ` heading of the rules source, with roles and visibility ──
+[rule_sections."__preamble__"]
+roles = ["cli", "bot", "cron", "remote"]
+visibility = "public"
+
+[rule_sections."Communication"]
+roles = ["cli", "bot", "cron", "remote"]
+visibility = "public"
+
+[rule_sections."Safety"]
+roles = ["cli", "bot", "cron", "remote"]
+visibility = "public"
+
+[rule_sections."Workflow"]
+roles = ["cli", "cron", "remote"]
+visibility = "private"
+
+[rule_sections."Local references"]
+roles = ["cli"]
+visibility = "private"
+
+# ── docs and hooks of the sources, each with a visibility ──
+[docs]
+"reuse-first.md" = "public"
+"team-notes.md" = "private"
+
+[hooks]
+"guard.sh" = "public"

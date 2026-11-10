@@ -1,0 +1,93 @@
+{
+  "schema": 1,
+  "generated_at": "2026-11-09T09:16:09Z",
+  "environments": [],
+  "errors": [],
+  "issues": [],
+  "glossary": {
+    "synced": {
+      "label_zh": "已同步",
+      "explain_zh": "和源一致，不用管"
+    },
+    "customized": {
+      "label_zh": "已定制",
+      "explain_zh": "按这台机器或这个 agent 的需要有意改过，是预期内的"
+    },
+    "drift": {
+      "label_zh": "漂移",
+      "explain_zh": "和清单期望的不一样，要修"
+    },
+    "missing": {
+      "label_zh": "缺失",
+      "explain_zh": "应该有但没有，要补"
+    },
+    "unknown": {
+      "label_zh": "未知",
+      "explain_zh": "没法核实，比如云端内容读不到或机器连不上"
+    },
+    "rules": {
+      "label_zh": "规则",
+      "explain_zh": "告诉 agent 怎么做事的说明文件，如 AGENTS.md"
+    },
+    "skills": {
+      "label_zh": "Skills",
+      "explain_zh": "agent 按需加载的技能包"
+    },
+    "hooks": {
+      "label_zh": "Hooks",
+      "explain_zh": "agent 做事前后自动跑的检查脚本"
+    },
+    "mcp": {
+      "label_zh": "MCP",
+      "explain_zh": "agent 能调用的外部工具服务"
+    },
+    "ai": {
+      "label_zh": "AI 能修",
+      "explain_zh": "让 AI 自己处理，写操作前会先问你"
+    },
+    "user": {
+      "label_zh": "要你处理",
+      "explain_zh": "要你亲手做或确认，比如登录、在 app 里存规则"
+    },
+    "other_env": {
+      "label_zh": "去另一台机器",
+      "explain_zh": "要到对应的机器上跑命令"
+    },
+    "notice": {
+      "label_zh": "提醒",
+      "explain_zh": "只是告诉你一声，通常不用动手"
+    },
+    "pass": {
+      "label_zh": "通过",
+      "explain_zh": "这次抽测 agent 守住了规则"
+    },
+    "fail": {
+      "label_zh": "没过",
+      "explain_zh": "agent 没守住规则"
+    },
+    "err": {
+      "label_zh": "出错",
+      "explain_zh": "抽测工具自己出错，这次没测到，结论未核实"
+    },
+    "skip": {
+      "label_zh": "跳过",
+      "explain_zh": "这个用例不适用，或这个 agent 没法抽测"
+    },
+    "safety": {
+      "label_zh": "安全层",
+      "explain_zh": "安全底线相关的定制，优先级最高"
+    },
+    "env": {
+      "label_zh": "环境层",
+      "explain_zh": "因为所在机器不同而做的定制"
+    },
+    "role": {
+      "label_zh": "角色层",
+      "explain_zh": "因为 agent 角色不同（命令行、机器人、定时任务）而做的定制"
+    },
+    "host": {
+      "label_zh": "宿主层",
+      "explain_zh": "某个 agent 自己特有的定制"
+    }
+  }
+}

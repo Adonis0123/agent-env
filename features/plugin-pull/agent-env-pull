@@ -1,0 +1,159 @@
+#!/bin/sh
+# agent-env-pull: pull this host's plugins and join their rules into the file the agent reads.
+# Installed and configured by `bin/agent-env deliver --target <id>` on the machine that drives this host
+# (agent-env, engine/pull.py; design: docs/plugins-design.md). Run by agent-env-pull.timer as the agent's
+# own user; safe to run by hand at any time.
+#
+# Config: $AGENT_ENV_PULL_CONF (default ~/.config/agent-env/pull.conf), generated, one `key=value` a line:
+#   output=<file>            the joined rules (replaced atomically, only when the content changes)
+#   dir=<dir>                one git checkout per plugin: <dir>/<name>
+#   header=<text>            first line of the joined file
+#   env_file=<file>          optional: read only the env_keys variables from it (git credentials)
+#   env_keys=<A B>
+#   plugin=<name> <url>      in order; later plugins override earlier ones
+# AGENT_ENV_PULL_OUTPUT overrides output and AGENT_ENV_PULL_STATUS the status file (a preview run that
+# leaves the real file and status alone).
+#
+# Joined file = header, a blank line, then each plugin's AGENTS.md, separated by one blank line.
+# A plugin that cannot be fetched keeps its last good checkout (result=stale, exit 1); a plugin that was
+# never fetched stops the run before the output is touched (result=failed, exit 1). The old output is
+# copied to <output dir>/.agent-env-backups/<name>.<UTC stamp> before it is replaced (newest 10 kept).
+# Status: ~/.local/state/agent-env/pull.status (key=value lines, no secret values).
+set -u
+umask 022
+LC_ALL=C
+export LC_ALL
+
+CONF=${AGENT_ENV_PULL_CONF:-$HOME/.config/agent-env/pull.conf}
+STATE=$HOME/.local/state/agent-env  # fixed: the driving machine reads it there
+STATUS=${AGENT_ENV_PULL_STATUS:-$STATE/pull.status}
+KEEP=10
+FETCH_TIMEOUT=${AGENT_ENV_PULL_TIMEOUT:-120}
+mkdir -p "$STATE" || exit 1
+
+now() { date -u +%Y-%m-%dT%H:%M:%SZ; }
+sha() { if command -v sha256sum >/dev/null 2>&1; then sha256sum "$1" | cut -d' ' -f1; else shasum -a 256 "$1" | cut -d' ' -f1; fi; }
+one_line() { printf '%s' "$1" | tr '\n\r' '  ' | cut -c1-300; }
+
+REVS=""
+write_status() {  # result changed sha stale error
+  tmp="$STATUS.tmp.$$"
+  {
+    echo "time=$(now)"
+    echo "result=$1"
+    echo "changed=$2"
+    echo "sha=$3"
+    echo "stale=$4"
+    echo "error=$(one_line "$5")"
+    echo "output=$OUTPUT"
+    printf '%s' "$REVS"
+  } > "$tmp" && mv -f "$tmp" "$STATUS"
+}
+fail() { write_status failed no "" "${STALE:-}" "$1"; echo "agent-env-pull: $1" >&2; exit 1; }
+
+OUTPUT=""; DIR=""; HEADER=""; ENV_FILE=""; ENV_KEYS=""; PLUGINS=""; STALE=""
+[ -r "$CONF" ] || { OUTPUT=${AGENT_ENV_PULL_OUTPUT:-}; fail "读不到配置 $CONF，在驱动这台机器的地方重跑 bin/agent-env deliver"; }
+while IFS= read -r line || [ -n "$line" ]; do
+  case $line in
+    output=*) OUTPUT=${line#output=} ;;
+    dir=*) DIR=${line#dir=} ;;
+    header=*) HEADER=${line#header=} ;;
+    env_file=*) ENV_FILE=${line#env_file=} ;;
+    env_keys=*) ENV_KEYS=${line#env_keys=} ;;
+    plugin=*) PLUGINS="$PLUGINS${line#plugin=}
+" ;;
+  esac
+done < "$CONF"
+[ -n "${AGENT_ENV_PULL_OUTPUT:-}" ] && OUTPUT=$AGENT_ENV_PULL_OUTPUT
+[ -n "$OUTPUT" ] && [ -n "$DIR" ] && [ -n "$PLUGINS" ] || fail "配置 $CONF 缺 output、dir 或 plugin"
+
+if command -v flock >/dev/null 2>&1; then
+  exec 9>"$STATE/pull.lock"
+  flock -n 9 || { echo "agent-env-pull: 已有一次在跑，跳过" >&2; exit 0; }
+fi
+
+# Git credentials: only the named variables, never printed.
+if [ -n "$ENV_FILE" ] && [ -r "$ENV_FILE" ]; then
+  for key in $ENV_KEYS; do
+    val=$(sed -n "s/^$key=//p" "$ENV_FILE" | tail -n 1)
+    case $val in \"*\") val=${val#\"}; val=${val%\"} ;; \'*\') val=${val#\'}; val=${val%\'} ;; esac
+    [ -n "$val" ] && export "$key=$val"
+  done
+  unset val
+fi
+export GIT_TERMINAL_PROMPT=0
+
+fetch() {  # <checkout>: newest commit of the remote's default branch into FETCH_HEAD
+  if command -v timeout >/dev/null 2>&1; then
+    timeout "$FETCH_TIMEOUT" git -C "$1" fetch -q --depth 1 origin HEAD
+  else
+    git -C "$1" fetch -q --depth 1 origin HEAD
+  fi
+}
+
+mkdir -p "$DIR" || fail "建不了目录 $DIR"
+NAMES=""
+while read -r name url; do
+  [ -n "$name" ] || continue
+  NAMES="$NAMES $name"
+  d=$DIR/$name
+  if [ -d "$d/.git" ]; then
+    [ "$(git -C "$d" remote get-url origin 2>/dev/null)" = "$url" ] || git -C "$d" remote set-url origin "$url"
+    if fetch "$d" && git -C "$d" reset -q --hard FETCH_HEAD && git -C "$d" clean -qfdx; then :; else
+      STALE="${STALE:+$STALE }$name"
+    fi
+  else
+    # init + fetch instead of clone: a credential helper that reads `git remote -v` needs the remote first
+    rm -rf "$d.new"
+    if git init -q "$d.new" && git -C "$d.new" remote add origin "$url" && fetch "$d.new" \
+        && git -C "$d.new" reset -q --hard FETCH_HEAD && mv "$d.new" "$d"; then :; else
+      rm -rf "$d.new"
+      STALE="${STALE:+$STALE }$name"
+    fi
+  fi
+  rev=$(git -C "$d" rev-parse HEAD 2>/dev/null || true)
+  REVS="${REVS}plugin.$name=$rev
+"
+done <<EOF
+$PLUGINS
+EOF
+
+for name in $NAMES; do
+  [ -f "$DIR/$name/AGENTS.md" ] || fail "插件 $name 从没拉成功过（没有 $DIR/$name/AGENTS.md），规则文件保持原样"
+done
+
+[ -L "$OUTPUT" ] && fail "$OUTPUT 是符号链接，不覆盖"
+folder=$(dirname "$OUTPUT"); base=$(basename "$OUTPUT")
+mkdir -p "$folder" || fail "建不了目录 $folder"
+tmp="$folder/.$base.agent-env-pull.tmp"
+{
+  printf '%s\n\n' "$HEADER"
+  first=1
+  for name in $NAMES; do
+    [ $first = 1 ] || printf '\n'
+    cat "$DIR/$name/AGENTS.md"
+    first=0
+  done
+} > "$tmp" || { rm -f "$tmp"; fail "写不了临时文件 $tmp"; }
+
+changed=no
+if [ -f "$OUTPUT" ] && cmp -s "$tmp" "$OUTPUT"; then
+  rm -f "$tmp"
+else
+  if [ -f "$OUTPUT" ]; then
+    bdir="$folder/.agent-env-backups"
+    mkdir -p "$bdir" && cp -p "$OUTPUT" "$bdir/$base.$(date -u +%Y%m%dT%H%M%SZ)" || { rm -f "$tmp"; fail "备份 $OUTPUT 失败，没有替换"; }
+    # stamps sort by time as text (cp -p keeps the old mtime, so ls -t would not)
+    ls -1 "$bdir/$base".* 2>/dev/null | sort -r | tail -n +$((KEEP + 1)) | while IFS= read -r old; do rm -f -- "$old"; done
+  fi
+  chmod 644 "$tmp" && mv -f "$tmp" "$OUTPUT" || { rm -f "$tmp"; fail "替换 $OUTPUT 失败，原文件保持原样"; }
+  changed=yes
+fi
+
+if [ -n "$STALE" ]; then
+  write_status stale "$changed" "$(sha "$OUTPUT")" "$STALE" "拉取失败，沿用上次拉到的版本：$STALE"
+  echo "agent-env-pull: 拉取失败，沿用上次拉到的版本：$STALE" >&2
+  exit 1
+fi
+write_status ok "$changed" "$(sha "$OUTPUT")" "" ""
+echo "agent-env-pull: ok changed=$changed"

@@ -1,0 +1,67 @@
+{
+  "schema": 1,
+  "generated_at": "2026-11-09T09:00:00Z",
+  "environments": [
+    {
+      "schema": 1, "env": "mac", "source": "live", "generated_at": "2026-11-09T09:00:00Z",
+      "targets": [
+        { "id": "mac/codex", "host": "codex", "env": "mac", "roles": ["cli"], "verified": true, "habits": [
+          { "kind": "rules", "name": "AGENTS.md", "state": "synced", "layer": "host", "detail": "~/.codex/AGENTS.md 链接到 ~/.claude/AGENTS.md", "fix": "", "origin": "rules" },
+          { "kind": "mcp", "name": "kimi-cu", "state": "synced", "layer": "host", "detail": "", "fix": "", "origin": "manifest" },
+          { "kind": "mcp", "name": "figma", "state": "drift", "layer": "host", "detail": "figma 没启用", "fix": "bin/agent-env mcp --fix", "origin": "manifest" }
+        ] },
+        { "id": "mac/hermes", "host": "hermes", "env": "mac", "roles": ["bot", "cron"], "verified": true, "habits": [
+          { "kind": "rules", "name": ".hermes.md", "state": "customized", "layer": "env", "detail": "", "fix": "", "origin": "rules" },
+          { "kind": "skills", "name": "metrics-query", "state": "synced", "layer": "host", "detail": "", "fix": "", "origin": "company_skills" }
+        ] }
+      ],
+      "eval": { "ran_at": null, "results": [] }
+    },
+    {
+      "schema": 1, "env": "grok-bot", "source": "live", "checked_from": "mac", "generated_at": "2026-11-09T09:00:00Z",
+      "targets": [
+        { "id": "grok-bot/bot", "host": "grok-bot", "env": "grok-bot", "roles": ["remote"], "verified": false, "habits": [
+          { "kind": "rules", "name": "指路规则", "state": "missing", "layer": "host", "detail": "没有投递记录", "fix": "bin/agent-env plugin pointer --target grok-bot/bot 输出指路规则，由你在该 app 里存进它的 memory 并确认后，运行 bin/agent-env plugin pointer --target grok-bot/bot --record", "origin": "rules" },
+          { "kind": "rules", "name": "插件 demo-public（公开）", "state": "drift", "layer": "host", "detail": "~/.local/state/agent-env/plugins/demo-public 比源过期：要新增 0 个、删除 0 个、更新 1 个文件", "fix": "bin/agent-env plugin build --plugin demo-public", "origin": "rules" },
+          { "kind": "rules", "name": "插件 token", "state": "synced", "layer": "host", "detail": "只用公开插件，不需要 token", "fix": "", "origin": "manifest" }
+        ] }
+      ],
+      "eval": { "ran_at": null, "results": [] }
+    },
+    {
+      "schema": 1, "env": "vps-helper", "source": "branch", "generated_at": "2026-11-09T08:00:00Z",
+      "targets": [
+        { "id": "vps-helper/hermes", "host": "hermes", "env": "vps-helper", "roles": ["bot", "cron"], "verified": true, "habits": [
+          { "kind": "rules", "name": "云账号登录", "state": "unknown", "layer": "host", "detail": "", "fix": "", "origin": null },
+          { "kind": "rules", "name": "AGENTS.md", "state": "customized", "layer": "env", "detail": "", "fix": "", "origin": "rules" },
+          { "kind": "skills", "name": "metrics-query", "state": "synced", "layer": "host", "detail": "", "fix": "", "origin": "company_skills" }
+        ] }
+      ],
+      "eval": { "ran_at": null, "results": [] }
+    }
+  ],
+  "errors": [ { "env": "wsl", "message": "读不到 status/wsl 分支", "fix": "在 wsl 环境跑 bin/agent-env status --commit --push" } ],
+  "issues": [
+    {"id": "wsl:env_unreadable:wsl", "env": "wsl", "target": null, "category": "env_unreadable", "state": "unreadable", "actor": "other_env", "title_zh": "WSL 还没上报状态", "impact_zh": "面板看不到 WSL 上各个 agent 的情况", "steps": [{"who": "other_env", "text_zh": "在 WSL 上先跑一遍体检看结果（只读，不提交也不推送）", "command": "bin/agent-env status", "confirm": false}, {"who": "other_env", "text_zh": "看过结果后确认，再运行 bin/agent-env status --commit --push（会提交并推送状态分支）", "command": null, "confirm": true}, {"who": "ai", "text_zh": "回到本机拉取最新状态", "command": "bin/agent-env status --json --all --fetch", "confirm": false}], "ai_task": null, "ref": {"kind": null, "name": "wsl", "case": null, "detail": "读不到 status/wsl 分支"}},
+    {"id": "grok-bot/bot:rules:指路规则", "env": "grok-bot", "target": "grok-bot/bot", "category": "habit", "state": "missing", "actor": "user", "title_zh": "Grok Bot 的指路规则还没投递", "impact_zh": "Grok Bot 还没收到这份规则，新加的规则它不知道", "steps": [{"who": "ai", "text_zh": "把插件生成到最新（只写本机，不提交不推送）", "command": "bin/agent-env plugin build --all", "confirm": false}, {"who": "ai", "text_zh": "生成指路规则（写到待投递文件），把全文显示出来，并复制到剪贴板", "command": "bin/agent-env plugin pointer --target grok-bot/bot", "confirm": false}, {"who": "user", "text_zh": "在 Grok Bot 里粘贴发送，让它存进长期记忆，等它回复已存好，再告诉 AI「已粘贴」", "command": null, "confirm": false}, {"who": "ai", "text_zh": "你说已存好后，记录这次投递", "command": "bin/agent-env plugin pointer --target grok-bot/bot --record", "confirm": true}, {"who": "ai", "text_zh": "重新体检确认", "command": "bin/agent-env doctor --env grok-bot", "confirm": false}], "ai_task": "fix", "ref": {"kind": "rules", "name": "指路规则", "case": null, "detail": "没有投递记录"}},
+    {"id": "grok-bot/bot:rules:插件 demo-public（公开）", "env": "grok-bot", "target": "grok-bot/bot", "category": "habit", "state": "drift", "actor": "ai", "title_zh": "Grok Bot 要拉的规则比源过期", "impact_zh": "Grok Bot 下次拉到的还是旧内容，新改的规则和技能它不知道", "steps": [{"who": "ai", "text_zh": "按源重新生成插件目录（只写本机，不提交不推送）", "command": "bin/agent-env plugin build --plugin demo-public", "confirm": false}, {"who": "ai", "text_zh": "重新体检确认", "command": "bin/agent-env doctor --env grok-bot", "confirm": false}], "ai_task": "fix", "ref": {"kind": "rules", "name": "插件 demo-public（公开）", "case": null, "detail": "~/.local/state/agent-env/plugins/demo-public 比源过期：要新增 0 个、删除 0 个、更新 1 个文件"}},
+    {"id": "mac/codex:mcp:figma", "env": "mac", "target": "mac/codex", "category": "habit", "state": "drift", "actor": "ai", "title_zh": "Codex 的 MCP 配置和清单不一致", "impact_zh": "工具可能重复注册、连不上或用错配置", "steps": [{"who": "ai", "text_zh": "先列出修复计划（只读，不改配置）", "command": "python3 engine/mcp.py manifest/habits.toml --target mac/codex --plan", "confirm": false}, {"who": "ai", "text_zh": "你确认后按计划改配置：bin/agent-env mcp --fix", "command": null, "confirm": true}], "ai_task": "fix", "ref": {"kind": "mcp", "name": "figma", "case": null, "detail": "figma 没启用"}}
+  ],
+  "relations": {
+    "sources": {
+      "rules": "~/.claude/AGENTS.md",
+      "docs": "~/agent-rules/docs",
+      "company_skills": "~/coding/agent-env/company-skills",
+      "manifest": "~/coding/agent-env/manifest/habits.toml"
+    },
+    "env_names": { "mac": "Mac", "grok-bot": "Grok Bot", "wsl": "WSL", "vps-helper": "小 helper 的云主机" },
+    "targets": [
+      { "id": "mac/codex", "env": "mac", "host": "codex", "name": "Codex", "roles": ["cli"] },
+      { "id": "mac/hermes", "env": "mac", "host": "hermes", "name": "Hermes（小 bot）", "roles": ["bot", "cron"] },
+      { "id": "grok-bot/bot", "env": "grok-bot", "host": "grok-bot", "name": "Grok Bot", "roles": ["remote"] },
+      { "id": "wsl/codex", "env": "wsl", "host": "codex", "name": "Codex", "roles": ["cli"] },
+      { "id": "wsl/grok", "env": "wsl", "host": "grok", "name": "Grok", "roles": ["cli"] },
+      { "id": "vps-helper/hermes", "env": "vps-helper", "host": "hermes", "name": "小 helper", "roles": ["bot", "cron"] }
+    ]
+  }
+}

@@ -1,0 +1,11 @@
+# agent-env: run agent-env-pull every 30 minutes (installed by bin/agent-env deliver).
+[Unit]
+Description=agent-env: pull plugins every 30 minutes
+
+[Timer]
+OnBootSec=5min
+OnUnitActiveSec=30min
+RandomizedDelaySec=60
+
+[Install]
+WantedBy=timers.target

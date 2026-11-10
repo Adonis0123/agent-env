@@ -1,0 +1,715 @@
+{
+  "schema": 1,
+  "generated_at": "2026-11-10T08:33:19Z",
+  "environments": [
+    {
+      "schema": 1,
+      "env": "mac",
+      "source": "live",
+      "generated_at": "2026-11-10T08:33:19Z",
+      "engine_rev": "fixture",
+      "summary": {},
+      "check": {
+        "ok": true,
+        "errors": []
+      },
+      "targets": [
+        {
+          "id": "mac/claude-code",
+          "host": "claude-code",
+          "env": "mac",
+          "roles": [
+            "cli"
+          ],
+          "verified": true,
+          "host_version": {
+            "recorded": "2.1.319",
+            "current": "2.1.322",
+            "changed": true
+          },
+          "habits": [
+            {
+              "kind": "rules",
+              "name": "AGENTS.md",
+              "state": "synced",
+              "layer": "host",
+              "detail": "~/.claude/CLAUDE.md 含 `@AGENTS.md`",
+              "fix": "",
+              "expect_kind": "contains"
+            }
+          ]
+        },
+        {
+          "id": "mac/codex",
+          "host": "codex",
+          "env": "mac",
+          "roles": [
+            "cli"
+          ],
+          "verified": true,
+          "host_version": {
+            "recorded": "0.167.0",
+            "current": "0.167.0",
+            "changed": false
+          },
+          "habits": [
+            {
+              "kind": "rules",
+              "name": "AGENTS.md",
+              "state": "synced",
+              "layer": "host",
+              "detail": "~/.codex/AGENTS.md 链接到 ~/.claude/AGENTS.md",
+              "fix": "",
+              "expect_kind": "link"
+            }
+          ]
+        },
+        {
+          "id": "mac/pi",
+          "host": "pi",
+          "env": "mac",
+          "roles": [
+            "cli"
+          ],
+          "verified": true,
+          "host_version": {
+            "recorded": "1.5.0",
+            "current": "1.5.1",
+            "changed": true
+          },
+          "habits": [
+            {
+              "kind": "rules",
+              "name": "AGENTS.md",
+              "state": "synced",
+              "layer": "host",
+              "detail": "~/.pi/agent/AGENTS.md 链接到 ~/.claude/AGENTS.md",
+              "fix": "",
+              "expect_kind": "link"
+            }
+          ]
+        }
+      ],
+      "eval": {
+        "ran_at": null,
+        "results": []
+      },
+      "issues": [
+        {
+          "id": "mac/claude-code:host_version:claude-code",
+          "env": "mac",
+          "target": "mac/claude-code",
+          "category": "host_version",
+          "state": "changed",
+          "actor": "ai",
+          "title_zh": "Claude Code 升级到了 2.1.322（清单登记的是 2.1.319）",
+          "impact_zh": "新版本可能改了规则的加载方式，分类表要重新核对",
+          "steps": [
+            {
+              "who": "ai",
+              "text_zh": "联网查 Claude Code 从 2.1.319 到 2.1.322 的发布说明和官方文档（只认一手来源），按 agent-env skill 第 3 节那张表逐项看有没有变：规则文件和加载顺序、skill 目录、hook 格式、MCP 配置位置、自动导入别家配置、规则体积上限",
+              "command": null,
+              "confirm": false
+            },
+            {
+              "who": "ai",
+              "text_zh": "在 Mac 上实测清单里 mac/claude-code 登记的加载方式还成立：先跑体检，再按那张表的「怎么查」用宿主自己的 inspect / debug 输出或日志核实",
+              "command": "bin/agent-env doctor",
+              "confirm": false
+            },
+            {
+              "who": "ai",
+              "text_zh": "有变化就停在这一步：报告哪一项变了、出处链接、清单或适配规则要改哪里，不改登记的版本；没变化再做下一步",
+              "command": null,
+              "confirm": false
+            },
+            {
+              "who": "ai",
+              "text_zh": "给你看核对结论，你同意后把清单 manifest/habits.toml 里 mac/claude-code 的 host_version.recorded 改成 2.1.322",
+              "command": null,
+              "confirm": true
+            },
+            {
+              "who": "ai",
+              "text_zh": "重新体检确认",
+              "command": "bin/agent-env doctor",
+              "confirm": false
+            }
+          ],
+          "ai_task": "fix",
+          "ref": {
+            "kind": "host_version",
+            "name": "claude-code",
+            "case": null
+          }
+        },
+        {
+          "id": "mac/pi:host_version:pi",
+          "env": "mac",
+          "target": "mac/pi",
+          "category": "host_version",
+          "state": "changed",
+          "actor": "ai",
+          "title_zh": "Pi 升级到了 1.5.1（清单登记的是 1.5.0）",
+          "impact_zh": "新版本可能改了规则的加载方式，分类表要重新核对",
+          "steps": [
+            {
+              "who": "ai",
+              "text_zh": "联网查 Pi 从 1.5.0 到 1.5.1 的发布说明和官方文档（只认一手来源），按 agent-env skill 第 3 节那张表逐项看有没有变：规则文件和加载顺序、skill 目录、hook 格式、MCP 配置位置、自动导入别家配置、规则体积上限",
+              "command": null,
+              "confirm": false
+            },
+            {
+              "who": "ai",
+              "text_zh": "在 Mac 上实测清单里 mac/pi 登记的加载方式还成立：先跑体检，再按那张表的「怎么查」用宿主自己的 inspect / debug 输出或日志核实",
+              "command": "bin/agent-env doctor",
+              "confirm": false
+            },
+            {
+              "who": "ai",
+              "text_zh": "有变化就停在这一步：报告哪一项变了、出处链接、清单或适配规则要改哪里，不改登记的版本；没变化再做下一步",
+              "command": null,
+              "confirm": false
+            },
+            {
+              "who": "ai",
+              "text_zh": "给你看核对结论，你同意后把清单 manifest/habits.toml 里 mac/pi 的 host_version.recorded 改成 1.5.1",
+              "command": null,
+              "confirm": true
+            },
+            {
+              "who": "ai",
+              "text_zh": "重新体检确认",
+              "command": "bin/agent-env doctor",
+              "confirm": false
+            }
+          ],
+          "ai_task": "fix",
+          "ref": {
+            "kind": "host_version",
+            "name": "pi",
+            "case": null
+          }
+        }
+      ]
+    },
+    {
+      "schema": 1,
+      "env": "grok-bot",
+      "source": "live",
+      "generated_at": "2026-11-10T08:33:19Z",
+      "engine_rev": "fixture",
+      "summary": {},
+      "check": {
+        "ok": true,
+        "errors": []
+      },
+      "targets": [
+        {
+          "id": "grok-bot/bot",
+          "host": "grok-bot",
+          "env": "grok-bot",
+          "roles": [
+            "remote"
+          ],
+          "verified": false,
+          "host_version": null,
+          "habits": [
+            {
+              "kind": "rules",
+              "name": "指路规则",
+              "state": "missing",
+              "layer": "host",
+              "detail": "没有投递记录；当前内容哈希 323861c2aa37。云端内容本身读不到",
+              "fix": "bin/agent-env plugin pointer --target grok-bot/bot 输出指路规则，由你在该 app 里存进它的 memory 并确认后，运行 bin/agent-env plugin pointer --target grok-bot/bot --record",
+              "expect_kind": "delivered"
+            },
+            {
+              "kind": "rules",
+              "name": "插件 demo-public（公开）",
+              "state": "synced",
+              "layer": "host",
+              "detail": "~/.local/state/agent-env/plugins/demo-public 与源一致（7 个文件，哈希 fd123a206015）",
+              "fix": "",
+              "expect_kind": "plugins"
+            },
+            {
+              "kind": "rules",
+              "name": "插件 token",
+              "state": "missing",
+              "layer": "host",
+              "detail": "还没登记读私有插件 ['demo-personal'] 的 token（清单只记名字和到期日）",
+              "fix": "建 fine-grained token：只授权个人插件仓、Contents 只读、90 天到期，经 Grok Bot 的 secret card 交给它；再在清单该落点写 token = { name = \"<secret 名>\", expires = <到期日> }",
+              "expect_kind": "token"
+            }
+          ]
+        }
+      ],
+      "eval": {
+        "ran_at": null,
+        "results": []
+      },
+      "checked_from": "mac",
+      "issues": [
+        {
+          "id": "grok-bot/bot:rules:指路规则",
+          "env": "grok-bot",
+          "target": "grok-bot/bot",
+          "category": "habit",
+          "state": "missing",
+          "actor": "user",
+          "title_zh": "Grok Bot 的指路规则还没投递",
+          "impact_zh": "Grok Bot 还没收到这份规则，新加的规则它不知道",
+          "steps": [
+            {
+              "who": "ai",
+              "text_zh": "把插件生成到最新（只写本机，不提交不推送）",
+              "command": "bin/agent-env plugin build --all",
+              "confirm": false
+            },
+            {
+              "who": "ai",
+              "text_zh": "生成指路规则（写到待投递文件），把全文显示出来，并复制到剪贴板",
+              "command": "bin/agent-env plugin pointer --target grok-bot/bot",
+              "confirm": false
+            },
+            {
+              "who": "user",
+              "text_zh": "在 Grok Bot 里粘贴发送，让它存进长期记忆，等它回复已存好，再告诉 AI「已粘贴」",
+              "command": null,
+              "confirm": false
+            },
+            {
+              "who": "ai",
+              "text_zh": "你说已存好后，记录这次投递",
+              "command": "bin/agent-env plugin pointer --target grok-bot/bot --record",
+              "confirm": true
+            },
+            {
+              "who": "ai",
+              "text_zh": "重新体检确认",
+              "command": "bin/agent-env doctor --env grok-bot",
+              "confirm": false
+            }
+          ],
+          "ai_task": "fix",
+          "ref": {
+            "kind": "rules",
+            "name": "指路规则",
+            "case": null,
+            "detail": "没有投递记录；当前内容哈希 323861c2aa37。云端内容本身读不到"
+          }
+        },
+        {
+          "id": "grok-bot/bot:rules:插件 token",
+          "env": "grok-bot",
+          "target": "grok-bot/bot",
+          "category": "habit",
+          "state": "missing",
+          "actor": "user",
+          "title_zh": "Grok Bot 还没有读私有插件的 token",
+          "impact_zh": "Grok Bot 拉不到个人插件，只能用公开插件",
+          "steps": [
+            {
+              "who": "user",
+              "text_zh": "建 fine-grained token：只授权个人插件仓、Contents 只读、90 天到期，经 Grok Bot 的 secret card 交给它；再在清单该落点写 token = { name = \"<secret 名>\", expires = <到期日> }",
+              "command": null,
+              "confirm": false
+            },
+            {
+              "who": "ai",
+              "text_zh": "你更新清单后重新体检确认",
+              "command": "bin/agent-env doctor --env grok-bot",
+              "confirm": false
+            }
+          ],
+          "ai_task": "prepare",
+          "ref": {
+            "kind": "rules",
+            "name": "插件 token",
+            "case": null,
+            "detail": "还没登记读私有插件 ['demo-personal'] 的 token（清单只记名字和到期日）"
+          }
+        }
+      ]
+    },
+    {
+      "schema": 1,
+      "env": "vps-helper",
+      "source": "branch",
+      "generated_at": "2026-11-10T08:00:00Z",
+      "engine_rev": "fixture",
+      "summary": {},
+      "check": {
+        "ok": true,
+        "errors": []
+      },
+      "targets": [
+        {
+          "id": "vps-helper/hermes",
+          "host": "hermes",
+          "env": "vps-helper",
+          "roles": [
+            "bot",
+            "cron"
+          ],
+          "verified": false,
+          "host_version": null,
+          "habits": [
+            {
+              "kind": "rules",
+              "name": "AGENTS.md",
+              "state": "customized",
+              "layer": "env",
+              "detail": "远程 ~/.hermes/AGENTS.md 与本机生成结果一致（含本落点档案）",
+              "fix": "",
+              "expect_kind": "generated"
+            },
+            {
+              "kind": "rules",
+              "name": "网关 hermes-gateway",
+              "state": "drift",
+              "layer": "host",
+              "detail": "远程服务 hermes-gateway 没在运行（inactive）",
+              "fix": "先看远程日志找原因，用户确认后再重启 hermes-gateway（环境 vps-helper 的运维 skill 有命令）",
+              "expect_kind": "service"
+            }
+          ]
+        }
+      ],
+      "eval": {
+        "ran_at": null,
+        "results": []
+      },
+      "issues": [
+        {
+          "id": "vps-helper/hermes:rules:网关 hermes-gateway",
+          "env": "vps-helper",
+          "target": "vps-helper/hermes",
+          "category": "habit",
+          "state": "drift",
+          "actor": "user",
+          "title_zh": "小 helper 的后台服务没在运行",
+          "impact_zh": "小 helper 现在收不到消息，也不会回复",
+          "steps": [
+            {
+              "who": "ai",
+              "text_zh": "先看远程服务日志找原因",
+              "command": null,
+              "confirm": false
+            },
+            {
+              "who": "user",
+              "text_zh": "确认后重启服务：先看远程日志找原因，用户确认后再重启 hermes-gateway（环境 vps-helper 的运维 skill 有命令）",
+              "command": null,
+              "confirm": true
+            }
+          ],
+          "ai_task": "prepare",
+          "ref": {
+            "kind": "rules",
+            "name": "网关 hermes-gateway",
+            "case": null,
+            "detail": "远程服务 hermes-gateway 没在运行（inactive）"
+          }
+        }
+      ]
+    }
+  ],
+  "errors": [],
+  "issues": [
+    {
+      "id": "grok-bot/bot:rules:指路规则",
+      "env": "grok-bot",
+      "target": "grok-bot/bot",
+      "category": "habit",
+      "state": "missing",
+      "actor": "user",
+      "title_zh": "Grok Bot 的指路规则还没投递",
+      "impact_zh": "Grok Bot 还没收到这份规则，新加的规则它不知道",
+      "steps": [
+        {
+          "who": "ai",
+          "text_zh": "把插件生成到最新（只写本机，不提交不推送）",
+          "command": "bin/agent-env plugin build --all",
+          "confirm": false
+        },
+        {
+          "who": "ai",
+          "text_zh": "生成指路规则（写到待投递文件），把全文显示出来，并复制到剪贴板",
+          "command": "bin/agent-env plugin pointer --target grok-bot/bot",
+          "confirm": false
+        },
+        {
+          "who": "user",
+          "text_zh": "在 Grok Bot 里粘贴发送，让它存进长期记忆，等它回复已存好，再告诉 AI「已粘贴」",
+          "command": null,
+          "confirm": false
+        },
+        {
+          "who": "ai",
+          "text_zh": "你说已存好后，记录这次投递",
+          "command": "bin/agent-env plugin pointer --target grok-bot/bot --record",
+          "confirm": true
+        },
+        {
+          "who": "ai",
+          "text_zh": "重新体检确认",
+          "command": "bin/agent-env doctor --env grok-bot",
+          "confirm": false
+        }
+      ],
+      "ai_task": "fix",
+      "ref": {
+        "kind": "rules",
+        "name": "指路规则",
+        "case": null,
+        "detail": "没有投递记录；当前内容哈希 323861c2aa37。云端内容本身读不到"
+      }
+    },
+    {
+      "id": "grok-bot/bot:rules:插件 token",
+      "env": "grok-bot",
+      "target": "grok-bot/bot",
+      "category": "habit",
+      "state": "missing",
+      "actor": "user",
+      "title_zh": "Grok Bot 还没有读私有插件的 token",
+      "impact_zh": "Grok Bot 拉不到个人插件，只能用公开插件",
+      "steps": [
+        {
+          "who": "user",
+          "text_zh": "建 fine-grained token：只授权个人插件仓、Contents 只读、90 天到期，经 Grok Bot 的 secret card 交给它；再在清单该落点写 token = { name = \"<secret 名>\", expires = <到期日> }",
+          "command": null,
+          "confirm": false
+        },
+        {
+          "who": "ai",
+          "text_zh": "你更新清单后重新体检确认",
+          "command": "bin/agent-env doctor --env grok-bot",
+          "confirm": false
+        }
+      ],
+      "ai_task": "prepare",
+      "ref": {
+        "kind": "rules",
+        "name": "插件 token",
+        "case": null,
+        "detail": "还没登记读私有插件 ['demo-personal'] 的 token（清单只记名字和到期日）"
+      }
+    },
+    {
+      "id": "vps-helper/hermes:rules:网关 hermes-gateway",
+      "env": "vps-helper",
+      "target": "vps-helper/hermes",
+      "category": "habit",
+      "state": "drift",
+      "actor": "user",
+      "title_zh": "小 helper 的后台服务没在运行",
+      "impact_zh": "小 helper 现在收不到消息，也不会回复",
+      "steps": [
+        {
+          "who": "ai",
+          "text_zh": "先看远程服务日志找原因",
+          "command": null,
+          "confirm": false
+        },
+        {
+          "who": "user",
+          "text_zh": "确认后重启服务：先看远程日志找原因，用户确认后再重启 hermes-gateway（环境 vps-helper 的运维 skill 有命令）",
+          "command": null,
+          "confirm": true
+        }
+      ],
+      "ai_task": "prepare",
+      "ref": {
+        "kind": "rules",
+        "name": "网关 hermes-gateway",
+        "case": null,
+        "detail": "远程服务 hermes-gateway 没在运行（inactive）"
+      }
+    },
+    {
+      "id": "mac/claude-code:host_version:claude-code",
+      "env": "mac",
+      "target": "mac/claude-code",
+      "category": "host_version",
+      "state": "changed",
+      "actor": "ai",
+      "title_zh": "Claude Code 升级到了 2.1.322（清单登记的是 2.1.319）",
+      "impact_zh": "新版本可能改了规则的加载方式，分类表要重新核对",
+      "steps": [
+        {
+          "who": "ai",
+          "text_zh": "联网查 Claude Code 从 2.1.319 到 2.1.322 的发布说明和官方文档（只认一手来源），按 agent-env skill 第 3 节那张表逐项看有没有变：规则文件和加载顺序、skill 目录、hook 格式、MCP 配置位置、自动导入别家配置、规则体积上限",
+          "command": null,
+          "confirm": false
+        },
+        {
+          "who": "ai",
+          "text_zh": "在 Mac 上实测清单里 mac/claude-code 登记的加载方式还成立：先跑体检，再按那张表的「怎么查」用宿主自己的 inspect / debug 输出或日志核实",
+          "command": "bin/agent-env doctor",
+          "confirm": false
+        },
+        {
+          "who": "ai",
+          "text_zh": "有变化就停在这一步：报告哪一项变了、出处链接、清单或适配规则要改哪里，不改登记的版本；没变化再做下一步",
+          "command": null,
+          "confirm": false
+        },
+        {
+          "who": "ai",
+          "text_zh": "给你看核对结论，你同意后把清单 manifest/habits.toml 里 mac/claude-code 的 host_version.recorded 改成 2.1.322",
+          "command": null,
+          "confirm": true
+        },
+        {
+          "who": "ai",
+          "text_zh": "重新体检确认",
+          "command": "bin/agent-env doctor",
+          "confirm": false
+        }
+      ],
+      "ai_task": "fix",
+      "ref": {
+        "kind": "host_version",
+        "name": "claude-code",
+        "case": null
+      }
+    },
+    {
+      "id": "mac/pi:host_version:pi",
+      "env": "mac",
+      "target": "mac/pi",
+      "category": "host_version",
+      "state": "changed",
+      "actor": "ai",
+      "title_zh": "Pi 升级到了 1.5.1（清单登记的是 1.5.0）",
+      "impact_zh": "新版本可能改了规则的加载方式，分类表要重新核对",
+      "steps": [
+        {
+          "who": "ai",
+          "text_zh": "联网查 Pi 从 1.5.0 到 1.5.1 的发布说明和官方文档（只认一手来源），按 agent-env skill 第 3 节那张表逐项看有没有变：规则文件和加载顺序、skill 目录、hook 格式、MCP 配置位置、自动导入别家配置、规则体积上限",
+          "command": null,
+          "confirm": false
+        },
+        {
+          "who": "ai",
+          "text_zh": "在 Mac 上实测清单里 mac/pi 登记的加载方式还成立：先跑体检，再按那张表的「怎么查」用宿主自己的 inspect / debug 输出或日志核实",
+          "command": "bin/agent-env doctor",
+          "confirm": false
+        },
+        {
+          "who": "ai",
+          "text_zh": "有变化就停在这一步：报告哪一项变了、出处链接、清单或适配规则要改哪里，不改登记的版本；没变化再做下一步",
+          "command": null,
+          "confirm": false
+        },
+        {
+          "who": "ai",
+          "text_zh": "给你看核对结论，你同意后把清单 manifest/habits.toml 里 mac/pi 的 host_version.recorded 改成 1.5.1",
+          "command": null,
+          "confirm": true
+        },
+        {
+          "who": "ai",
+          "text_zh": "重新体检确认",
+          "command": "bin/agent-env doctor",
+          "confirm": false
+        }
+      ],
+      "ai_task": "fix",
+      "ref": {
+        "kind": "host_version",
+        "name": "pi",
+        "case": null
+      }
+    }
+  ],
+  "glossary": {
+    "synced": {
+      "label_zh": "已同步",
+      "explain_zh": "和源一致，不用管"
+    },
+    "customized": {
+      "label_zh": "已定制",
+      "explain_zh": "按这台机器或这个 agent 的需要有意改过，是预期内的"
+    },
+    "drift": {
+      "label_zh": "漂移",
+      "explain_zh": "和清单期望的不一样，要修"
+    },
+    "missing": {
+      "label_zh": "缺失",
+      "explain_zh": "应该有但没有，要补"
+    },
+    "unknown": {
+      "label_zh": "未知",
+      "explain_zh": "没法核实，比如云端内容读不到或机器连不上"
+    },
+    "rules": {
+      "label_zh": "规则",
+      "explain_zh": "告诉 agent 怎么做事的说明文件，如 AGENTS.md"
+    },
+    "skills": {
+      "label_zh": "Skills",
+      "explain_zh": "agent 按需加载的技能包"
+    },
+    "hooks": {
+      "label_zh": "Hooks",
+      "explain_zh": "agent 做事前后自动跑的检查脚本"
+    },
+    "mcp": {
+      "label_zh": "MCP",
+      "explain_zh": "agent 能调用的外部工具服务"
+    },
+    "ai": {
+      "label_zh": "AI 能修",
+      "explain_zh": "让 AI 自己处理，写操作前会先问你"
+    },
+    "user": {
+      "label_zh": "要你处理",
+      "explain_zh": "要你亲手做或确认，比如登录、在 app 里存规则"
+    },
+    "other_env": {
+      "label_zh": "去另一台机器",
+      "explain_zh": "要到对应的机器上跑命令"
+    },
+    "notice": {
+      "label_zh": "提醒",
+      "explain_zh": "只是告诉你一声，通常不用动手"
+    },
+    "pass": {
+      "label_zh": "通过",
+      "explain_zh": "这次抽测 agent 守住了规则"
+    },
+    "fail": {
+      "label_zh": "没过",
+      "explain_zh": "agent 没守住规则"
+    },
+    "err": {
+      "label_zh": "出错",
+      "explain_zh": "抽测工具自己出错，这次没测到，结论未核实"
+    },
+    "skip": {
+      "label_zh": "跳过",
+      "explain_zh": "这个用例不适用，或这个 agent 没法抽测"
+    },
+    "safety": {
+      "label_zh": "安全层",
+      "explain_zh": "安全底线相关的定制，优先级最高"
+    },
+    "env": {
+      "label_zh": "环境层",
+      "explain_zh": "因为所在机器不同而做的定制"
+    },
+    "role": {
+      "label_zh": "角色层",
+      "explain_zh": "因为 agent 角色不同（命令行、机器人、定时任务）而做的定制"
+    },
+    "host": {
+      "label_zh": "宿主层",
+      "explain_zh": "某个 agent 自己特有的定制"
+    }
+  }
+}
