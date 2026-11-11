@@ -817,6 +817,11 @@ def check_plugins(rep, m):
     if table and (not isinstance(m.get("plugin_owner"), str) or not m["plugin_owner"]):
         rep.add(FAIL, c, "有插件但顶层没有 plugin_owner",
                 "在清单顶部写 plugin_owner = \"<GitHub 用户名>\"（插件和 marketplace 的作者名，不写邮箱）")
+    errs = plugins.publish_from_errors(m)
+    for msg, fix in errs:
+        rep.add(FAIL, c, msg, fix)
+    if not errs and plugins.publisher(m):
+        rep.add(PASS, c, f"{plugins.PUBLISH_FROM}：插件由 {plugins.publisher(m)} 生成并发布，其他机器只使用")
     for name, spec in table.items():
         errs = plugins.plugin_errors(m, name, spec)
         for msg, fix in errs:

@@ -214,6 +214,8 @@ export const CSS = `
   .todo-where .sep { margin: 0 4px; }
   .todo-impact { margin-top: 2px; max-width: 72ch; font-size: 13px; color: var(--kit-muted, #666); }
   .todo-acts { grid-area: acts; display: flex; align-items: center; gap: 4px; align-self: start; }
+  /* a thing to do that is another machine's job: where to go, in the place of the button */
+  .todo-at { font-size: 13px; color: var(--kit-muted, #666); overflow-wrap: anywhere; }
   .todo-more { grid-area: more; display: grid; gap: 8px; padding: 8px 0 4px; }
   .raw-line { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 8px; font-size: 12px; color: var(--kit-faint, #999); }
   .raw-line code { color: var(--kit-muted, #666); overflow-wrap: break-word; }
@@ -615,21 +617,25 @@ export function todoHtml(ctx: Ctx, v: View, t: Todo, key: string, opts: { where?
   const title = pick(ctx, t.title_zh, t.title_en);
   // every step says where it runs from its own `who`: the other machine, or this machine's folder
   const aiSteps = t.steps.map((s): AiStep => ({ who: s.who, text: pick(ctx, s.text_zh, s.text_en), command: s.command, confirm: s.confirm }));
-  const place = { ...whereOf(ctx), machine: t.env };
-  const primary = acts.primary === "copy"
-    ? copyButton(ctx, aiStepsText(ctx.lang, title, aiSteps, place), { quiet: false })
-    : aiButton(ctx, v, t, acts.ai, false);
-  const moreLabel = tr("More: the steps, with the commands for your AI");
+  // the other machine is the one the engine names (the machine that builds and publishes), else the thing's own
+  const machine = t.at?.name ?? t.env;
+  const place = { ...whereOf(ctx), machine };
+  const primary = acts.primary === "none"
+    ? `<span class="todo-at">${esc(tr("Handle it on {name}", { name: machine }))}</span>`
+    : acts.primary === "copy"
+      ? copyButton(ctx, aiStepsText(ctx.lang, title, aiSteps, place), { quiet: false })
+      : aiButton(ctx, v, t, acts.ai, false);
+  const moreLabel = acts.primary === "none" ? tr("More: the steps") : tr("More: the steps, with the commands for your AI");
   const more = `<button type="button" class="lt-btn lt-btn-sm lt-btn-icon" aria-expanded="false" aria-controls="${key}" data-toggle="${key}" aria-label="${esc(moreLabel)}" data-tip="${esc(moreLabel)}">${icon("more")}</button>`;
   const steps = t.steps.length
     ? `<ol class="steps">${t.steps
         .map((s, i) => {
-          const whoText = s.who === "ai" ? "AI" : s.who === "other_env" ? tr("You, on {env}", { env: t.env }) : tr("You");
+          const whoText = s.who === "ai" ? "AI" : s.who === "other_env" ? tr("You, on {env}", { env: machine }) : tr("You");
           const text = pick(ctx, s.text_zh, s.text_en);
           // the dry-run wording only when an earlier step is a dry run; local delivery has none
           const afterDryRun = t.steps.slice(0, i).some((x) => x.command?.includes("--dry-run"));
           const confirm = s.confirm ? `<span class="confirm-note">${esc(afterDryRun ? tr("look at the dry run, then confirm") : tr("Run it only after you confirm"))}</span>` : "";
-          const cmd = s.command ? `<div class="cmd">${codeHtml(s.command)}${copyButton(ctx, aiStepText(ctx.lang, title, aiSteps, i, place), { quiet: false, label: tr("Copy this step for AI") })}</div>` : "";
+          const cmd = s.command && acts.primary !== "none" ? `<div class="cmd">${codeHtml(s.command)}${copyButton(ctx, aiStepText(ctx.lang, title, aiSteps, i, place), { quiet: false, label: tr("Copy this step for AI") })}</div>` : "";
           return `<li class="step${s.confirm ? " is-confirm" : ""}" id="${key}-s${i}"><div class="step-body"><p class="step-text"><span class="step-who">${esc(whoText)}</span><span>${esc(text)}</span>${confirm}</p>${cmd}</div></li>`;
         })
         .join("")}</ol>`
@@ -973,8 +979,17 @@ function fixHtml(ctx: Ctx, fix: string, what = ""): string {
 /** One kind of one agent: its source once, problems open with their reason and fix, the rest one folded line. */
 function kindSection(ctx: Ctx, v: View, g: RelationGraph, a: RelNode, k: AgentKind, opts: { hidden: boolean; heading: boolean }): string {
   const { t } = ctx;
+  // a problem that is the job of the machine that builds and publishes the plugins (its thing to do carries `at`):
+  // where to go, in words; the cell's own fix is a command for that machine and is not handed out here
+  const away = (h: { kind: string; name: string }) => v.todos.find((x) => x.at && x.target === a.id && x.ref.kind === h.kind && x.ref.name === h.name)?.at;
+  const fix = (h: AgentKind["problems"][number]) => {
+    const at = away(h);
+    return at
+      ? `<p class="rp-fix">${esc(t("Handle it on {name}", { name: at.name }))}</p>`
+      : fixHtml(ctx, h.fix, `${agentName(ctx, a)} · ${itemName(h)} (${word(ctx, v, h.state)})${h.detail ? `: ${h.detail}` : ""}`);
+  };
   let bad = k.problems.length
-    ? `<ul class="rp-bad">${k.problems.map((h) => `<li><p class="rp-line"><span class="rp-name">${esc(itemName(h))}</span>${mark(h.state, word(ctx, v, h.state))}</p>${h.detail ? `<p class="rp-why">${esc(h.detail)}</p>` : ""}${fixHtml(ctx, h.fix, `${agentName(ctx, a)} · ${itemName(h)} (${word(ctx, v, h.state)})${h.detail ? `: ${h.detail}` : ""}`)}</li>`).join("")}</ul>`
+    ? `<ul class="rp-bad">${k.problems.map((h) => `<li><p class="rp-line"><span class="rp-name">${esc(itemName(h))}</span>${mark(h.state, word(ctx, v, h.state))}</p>${h.detail ? `<p class="rp-why">${esc(h.detail)}</p>` : ""}${fix(h)}</li>`).join("")}</ul>`
     : "";
   let rest = "";
   if (k.rest.length) {

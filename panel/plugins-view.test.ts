@@ -93,6 +93,65 @@ test("plugins tab: one of the user's own machines on plugins composes them itsel
   }
 });
 
+test("plugins tab: on a machine that only uses the plugins, one sentence names who publishes and nothing asks it to build or push", async () => {
+  // v9-publish-from: the demo manifest (publish_from = "mac") as its WSL machine sees it, before the laptop built anything
+  const html = await fragment(FIX("v9-publish-from"));
+  const p = panel(html);
+  // said once, above the flow
+  assert.match(p, /<\/div><p class="pv-away" data-pv-publisher="mac">插件由 Mac 生成并发布。这台电脑只使用，不用在这里生成或推送。<\/p><section class="pv-sec" aria-labelledby="pv-flow-h">/);
+  assert.equal(p.match(/由 Mac/g)?.length, 1, "the publishing machine is not repeated on every plugin");
+  // a plugin's line is its name and who may read it: no build or push mark, no build folder, no command
+  const rows = [...p.matchAll(/<li class="pv-plugin">(.*?)<\/li>/g)].map((m) => m[1].replace(/ data-tip="[^"]*"/g, ""));
+  assert.deepEqual(rows, [["demo-public", "公开"], ["demo-personal", "个人"], ["demo-company", "公司"], ["demo-mac", "本机"], ["demo-wsl", "本机"]].map(
+    ([name, vis]) => `<span class="pv-pl-h"><span class="pv-pl">${name}</span><span class="pv-tag">${vis}</span></span>`));
+  assert.doesNotMatch(p, /未生成|未推送|生成结果过期|仓库里是旧版|生成到|另一台电脑|不用生成/);
+  const flow = p.slice(0, p.indexOf('id="pv-gets-h"'));
+  assert.doesNotMatch(flow, /m-missing|m-fail|is-alert/, "no plugin or repository is framed as broken");
+  assert.doesNotMatch(html, /plugin build|plugin publish|plugin pointer/, "no tab hands out a command that builds or publishes");
+  // what the host said about a repository shows as on every machine; the fix names the machine and has no button
+  assert.match(p, /agent-plugin-personal<\/a><span class="pv-vis v-private"[^>]*><svg[^]*?<\/svg>私有<span class="pv-empty">空仓<\/span><\/span>/);
+  assert.match(p, /<ul class="pv-notes"><li><span class="mark m-drift">.*?<span>空仓<\/span><\/span><span class="pv-fix">到 Mac 上让 AI 发布<\/span><\/li><\/ul>/);
+  assert.deepEqual([...p.matchAll(/data-copy="([^"]*)"(?! data-tip="~)/g)].map((m) => unesc(m[1]).replace(/（在 [^ ]+ 目录里/, "（在 … 目录里")),
+    ["帮我重新查一下各个仓库是公开还是私有（在 … 目录里运行 bin/agent-env plugin repos --refresh）。"], "the only sentence to copy is the read-only check");
+  // the bot the laptop drives: what is missing still shows; the way out names the laptop, in words, with no button
+  const bot = p.slice(p.indexOf("Grok Bot</span><p"), p.indexOf("别人的机器</span></th>"));
+  assert.match(bot, /<ul class="pv-notes"><li><span class="mark m-missing">.*?<span>指路规则未投递<\/span><\/span><span class="pv-fix">到 Mac 上让 AI 处理<\/span><\/li><\/ul>/);
+  assert.doesNotMatch(bot, /pv-cmd|data-copy/);
+
+  const data = readPluginsView(fixture("v9-publish-from").plugins_view);
+  assert.ok(data.kind === "ok");
+  assert.deepEqual(data.view.publisher, { env: "mac", name: "Mac" });
+  assert.deepEqual(data.view.plugins.map((x) => [x.build.state, x.build.fix, x.publish.state, x.publish.fix]), [
+    ["elsewhere", "", "elsewhere", ""], ["elsewhere", "", "elsewhere", ""], ["elsewhere", "", "elsewhere", ""], ["not_needed", "", "local", ""], ["not_needed", "", "local", ""]]);
+  assert.deepEqual(data.view.plugin_repos.map((c) => c.notes), [[], [{ code: "empty_repo", state: "drift", text_zh: "空仓", fix: "到 Mac 上让 AI 发布", at: "mac" }], []]);
+  assert.deepEqual(data.view.environments.flatMap((e) => e.notes), [{ code: "pointer_missing", state: "missing", text_zh: "指路规则未投递", fix: "到 Mac 上让 AI 处理", at: "mac" }]);
+  for (const key of ["built on another machine", "no build needed here", "pushed from another machine"]) assert.ok(key in ZH, key);
+});
+
+test("plugins tab: the publishing machine, and a status that names no publisher, show what they always showed", async () => {
+  const raw = fixture("v8-plugins");
+  const data = readPluginsView(raw.plugins_view);
+  assert.ok(data.kind === "ok");
+  assert.equal(data.view.publisher, null);
+  assert.ok(data.view.plugin_repos.flatMap((c) => c.notes).every((n) => n.at === null));
+  const p = panel(await fragment(FIX("v8-plugins")));
+  assert.doesNotMatch(p, /pv-away/);
+  assert.equal(p.match(/<span class="pv-pl-s"><span class="mark m-synced"[^>]*>.*?<span>已生成<\/span><\/span><span class="mark m-drift"[^>]*>.*?<span>未推送<\/span><\/span><\/span>/g)?.length, 2);
+  assert.match(p, /生成到 ~\/\.local\/state\/agent-env\/plugins/);
+  assert.match(p, /<span>空仓<\/span><\/span><\/li><li><span class="mark m-drift">.*?<span>未推送<\/span><\/span><span class="pv-cmd">/);
+  // a neutral state from an engine that names no publisher is still a quiet mark, never an unknown one
+  const dir = mkdtempSync(join(tmpdir(), "pv-"));
+  try {
+    const file = join(dir, "status.json");
+    const plugins = raw.plugins_view.plugins.map((x: object) => ({ ...x, build: { state: "elsewhere", detail: "", fix: "" }, publish: { state: "elsewhere", detail: "", fix: "" } }));
+    writeFileSync(file, JSON.stringify({ ...raw, plugins_view: { ...raw.plugins_view, plugins } }));
+    const odd = panel(await fragment(file));
+    assert.equal(odd.match(/<span class="mark m-none">.*?<span>由另一台电脑生成<\/span><\/span><span class="mark m-none">.*?<span>由另一台电脑推送<\/span><\/span>/g)?.length, 2);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 test("plugins tab: a status without plugins_view shows an empty state, the engine's error shows as an error", async () => {
   const p = panel(await fragment(FIX("v7-relations")));
   assert.match(p, /<div class="empty" role="status" data-pv="absent"><p><strong>还没有插件信息<\/strong><\/p><p>生成这份数据的检查工具版本较旧[^<]*把下面这句话复制给你的 AI[^<]*<\/p><div class="fix-line"><span class="pv-cmd"><button[^>]*data-copy="帮我把 agent-env 更新到最新版（先告诉我你打算怎么更新，等我同意再动手），再把每台机器重新检查一遍，让「插件」标签有内容可显示（在 [^ ]+ 目录里运行 bin\/agent-env status --json --all）。会改动或上传东西的步骤，先给我看，等我同意再做。"/);

@@ -51,6 +51,26 @@ takes no personal plugin, a vendor's cloud takes no company plugin. `check` and 
 When the patch layer overrides a section or a skill, doctor and the panel show it as 已覆盖 (overridden) with
 the plugin it came from. If the overridden part changes upstream, doctor tells you; it does not follow on its own.
 
+### Which machine builds and publishes (`publish_from`)
+
+Builds and the publish ledger live in one machine's state directory. With more than one machine of your own,
+write the top-level `publish_from = "<environment>"` (one of your own machines, an `[environments.<name>]`
+without `transport`) to say which one builds and publishes. Every other machine only uses the plugins: it
+composes its rules from the rules source, so a build that is not there and a push it never recorded are not
+problems. There, the panel's 插件 tab says once who publishes, shows no build or push state and offers no
+`plugin build` / `plugin publish`, and a `plugins` expectation reports a build it cannot judge as unknown
+instead of missing. What a host says about a repository (public or private, empty) shows the same on every
+machine; an empty repository is fixed by publishing on the `publish_from` machine. What only that machine can
+fix still shows on the others, as a thing to do there and never as a command to run here: a pointer rule that
+was not delivered, a remote that pulled rules older than the source, a build the publishing machine itself
+reported missing. The to-do entry names the machine ("到 Mac 上处理") and has no button; a mistake in the
+manifest keeps its own fix, because the manifest can be corrected anywhere. Which machine a run is: the
+environment it was asked to report (`--env`, when that is one of your own machines), else the first environment
+whose `platform` / `wsl` matches; the cloud-hosted environments checked in the same run use the same answer.
+Without the key every
+machine judges its own builds and records, as before. The key changes what is reported, not what the commands
+do: `plugin build` and `plugin publish` still run wherever they are started.
+
 ### What a plugin repository holds
 
 - `AGENTS.md`: the plugin's rules. Host plugin formats cannot carry always-on rules, so the engine delivers the

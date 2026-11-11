@@ -11,6 +11,7 @@ schema = 1
 roles = ["cli", "bot", "cron", "remote"]
 visibility = ["public", "private"]
 plugin_owner = "example-user" # author name in the generated .claude-plugin/*.json; never an email
+publish_from = "mac"          # the laptop builds and publishes the plugins; every other machine only uses them
 
 [sources]
 rules_src = "../sources/agents-md" # where rules are edited: public.md, personal.md, local.md (one file per owner)

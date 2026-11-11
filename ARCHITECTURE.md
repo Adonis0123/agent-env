@@ -193,7 +193,12 @@ in each repository that has a `skills-lock.json`, with a git fallback. After the
 `delivered` reports drift when the plugin list or a repository changes. A bot that reads a private plugin needs
 a read-only token for that repository; the manifest records only its name and expiry date, and `token` warns
 seven days ahead. Cloud-hosted environments are checked on their `driven_from` machine, because every check
-reads that machine's state.
+reads that machine's state. The top-level `publish_from` names the one machine that builds and publishes; on any
+other machine doctor and the panel report a build or push that is not there as not theirs to do
+(`plugins.published_away`), never as missing, and a to-do that needs a build or a publish is sent to that
+machine (`at` on the issue, no command). A run records which machine it is once (`plugins.acting_env`: `--env`
+when it names one of the user's own machines, else the platform match), and every check in the run, the
+cloud-hosted ones included, reads that.
 
 ## 4. Engine module map
 

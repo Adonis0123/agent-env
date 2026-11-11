@@ -64,7 +64,7 @@ from state import state_dir  # noqa: E402
 from cells import (CUSTOMIZED, DRIFT, HABITS, MISSING, STATES, SYNCED, UNKNOWN,  # noqa: E402
                    cell, tag)
 import overlay  # noqa: E402
-from habits import find_target, load_manifest, normalize, read_rules  # noqa: E402
+from habits import find_target, load_manifest, machine_env, normalize, read_rules  # noqa: E402
 
 # the personal repository: this checkout, or the one that vendors the engine (engine/overlay.py)
 REPO_DIR = overlay.overlay_root()
@@ -116,23 +116,6 @@ def _load(manifest_path) -> dict:
 
 # ── environment ───────────────────────────────────────────────────────────
 
-def _is_wsl() -> bool:
-    try:
-        return "microsoft" in Path("/proc/version").read_text(encoding="utf-8", errors="replace").lower()
-    except OSError:
-        return False
-
-
-def _env_matches(spec) -> bool:
-    if not isinstance(spec, dict) or not isinstance(spec.get("platform"), str):
-        return False
-    if not sys.platform.startswith(spec["platform"]):
-        return False
-    if "wsl" in spec and bool(spec["wsl"]) != _is_wsl():
-        return False
-    return True
-
-
 def known_envs(manifest: dict) -> list:
     """Every environment name --env may take: declared in [environments] or used as `env` by a [[targets]] entry
     (a target may belong to an environment that is deliberately not declared), sorted."""
@@ -147,7 +130,6 @@ def known_envs(manifest: dict) -> list:
 def detect_env(manifest: dict, override=None) -> str:
     """The environment name: --env (a name the manifest knows, see known_envs), then the first
     [environments.<name>] matching this machine."""
-    envs = manifest.get("environments", {})
     known = known_envs(manifest)
     if override:
         name = override
@@ -161,7 +143,7 @@ def detect_env(manifest: dict, override=None) -> str:
             raise AgentEnvError(f"清单里没有环境「{name}」。{hint}清单里有：{'、'.join(known)}。"
                                 f"修复：把 --env 改成其中一个；要接新机器就先在清单写 [environments.{name}]")
     else:
-        name = next((n for n, spec in envs.items() if _env_matches(spec)), None) if isinstance(envs, dict) else None
+        name = machine_env(manifest)
         if name is None:
             use = f"加 --env <环境名>（清单里有：{'、'.join(known)}），或" if known else ""
             raise AgentEnvError(f"清单里没有和本机（{sys.platform}）匹配的环境。"
@@ -305,10 +287,15 @@ def target_status(manifest: dict, target: dict, rules_text) -> dict:
             "host_version": host_version(target), "habits": habits}
 
 
-def doctor(manifest_path, env=None, repo=None) -> dict:
-    """The live status of one environment (schema 1, `source: live`)."""
+def doctor(manifest_path, env=None, repo=None, here=None) -> dict:
+    """The live status of one environment (schema 1, `source: live`). `here`: the environment this machine is,
+    when the caller already knows (all_status checking a cloud-hosted environment for the live one); else it
+    is worked out from `env` (plugins.acting_env). Every check of this run reads it from the manifest."""
     manifest = _load(manifest_path)
     env = detect_env(manifest, env)
+    here = here or plugins.acting_env(manifest, env)
+    if here:
+        manifest[plugins.MACHINE_KEY] = here
     rules_text = _rules_text(manifest)
     spec = env_spec(manifest, env)
     if spec.get("transport") == render.REMOTE_EXEC:
@@ -510,7 +497,8 @@ def cloud_envs(manifest: dict, live_env: str) -> list:
 def all_status(manifest_path, env=None, repo=None, fetch=False, live=None) -> dict:
     manifest = _load(manifest_path)
     live = live or doctor(manifest_path, env, repo)
-    cloud = [doctor(manifest_path, c, repo) for c in cloud_envs(manifest, live["env"])]
+    here = plugins.acting_env(manifest, live["env"])  # the machine the live status was taken on
+    cloud = [doctor(manifest_path, c, repo, here) for c in cloud_envs(manifest, live["env"])]
     for c in cloud:
         c["checked_from"] = live["env"]
         c["source"] = "live"
@@ -522,18 +510,20 @@ def all_status(manifest_path, env=None, repo=None, fetch=False, live=None) -> di
                            "fix": str(e["error"].get("fix", ""))})
     # a copy: the live status may also be what --commit stores, and `origin` belongs to this view only
     envs = [issues.annotate_eval(copy.deepcopy(e), manifest) for e in [live] + branches]
-    found = issues.build(envs, errors, manifest)
+    found = issues.build(envs, errors, manifest, away=plugins.published_away(manifest, live["env"]))
     for e in envs:
         e["issues"] = [i for i in found if i["env"] == e["env"]]
     return {"schema": SCHEMA, "generated_at": iso(now_utc()),
             "environments": envs, "errors": errors, "issues": found, "glossary": issues.glossary(),
             "relations": relations(manifest, manifest_path, envs),
-            "plugins_view": plugins_view.view(manifest, manifest_path, envs, _rules_text(manifest))}
+            "plugins_view": plugins_view.view(manifest, manifest_path, envs, _rules_text(manifest),
+                                              env=live["env"])}
 
 
 def with_issues(manifest_path, status: dict) -> dict:
     """One environment status plus its own `issues` (schema 1, additive)."""
-    status["issues"] = issues.build([status], [], _load(manifest_path))
+    manifest = _load(manifest_path)
+    status["issues"] = issues.build([status], [], manifest, away=plugins.published_away(manifest, status["env"]))
     return status
 
 

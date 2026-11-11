@@ -1,7 +1,9 @@
 // The 插件 tab: which plugin repositories are public or private, how a habit gets from its source repositories to
 // each environment, and what each environment gets. Its only data is the status's optional `plugins_view`
 // (engine/plugins_view.py, docs/status-schema.md「插件视图」); the engine writes the Chinese texts, the tab adds no
-// judgement of its own. No import from page.ts but types: page.ts imports this module, and hands in the few shared
+// judgement of its own. When the view names a `publisher` (another machine builds and publishes the plugins), the
+// tab says so once, above the flow, and leaves out what only that machine can act on: per-plugin build and push
+// marks, the build folder, and any command or copy button for a fix that is done over there. No import from page.ts but types: page.ts imports this module, and hands in the few shared
 // pieces (state marks, the AI button) as a kit.
 import { readsOnly } from "./ai-copy.ts";
 import type { T } from "./i18n.ts";
@@ -11,7 +13,8 @@ export type Visibility = "public" | "personal" | "company" | "local";
 export const VIS_ORDER: Visibility[] = ["public", "personal", "company", "local"];
 export type RepoVisibility = "public" | "private" | "unknown";
 
-export interface PvNote { code: string; state: string; text_zh: string; fix: string }
+/** `at`: the environment the fix is done on when that is not this machine; such a fix is words, never a button. */
+export interface PvNote { code: string; state: string; text_zh: string; fix: string; at: string | null }
 export interface PvRepo { key: string; name: string; url: string; host: string; visibility: RepoVisibility; empty: boolean | null; checked_at: string | null; detail: string; fix: string }
 export interface PvSource { name: string; repo: string | null; path: string; provides: string[] }
 export interface PvGenerator extends PvSource { output: string }
@@ -48,6 +51,8 @@ export interface PluginsView {
   plugin_repos: PvPluginRepo[];
   plugins: PvPlugin[];
   environments: PvEnv[];
+  /** the machine that builds and publishes the plugins, when it is not the one the status was taken on */
+  publisher: { env: string; name: string } | null;
 }
 export type PluginsData = { kind: "absent" } | { kind: "error"; message: string; fix: string; refresh: string } | { kind: "ok"; view: PluginsView };
 
@@ -60,7 +65,7 @@ const strOrNull = (v: unknown) => (typeof v === "string" && v ? v : null);
 const strs = (v: unknown) => (Array.isArray(v) ? v.filter((x): x is string => typeof x === "string") : []);
 const list = (v: unknown) => (Array.isArray(v) ? v.filter(obj) : []);
 const isVis = (v: unknown): v is Visibility => typeof v === "string" && (VIS_ORDER as string[]).includes(v);
-const note = (n: Record<string, unknown>): PvNote => ({ code: str(n.code), state: str(n.state) || "unknown", text_zh: str(n.text_zh), fix: str(n.fix) });
+const note = (n: Record<string, unknown>): PvNote => ({ code: str(n.code), state: str(n.state) || "unknown", text_zh: str(n.text_zh), fix: str(n.fix), at: strOrNull(n.at) });
 const source = (s: Record<string, unknown>): PvSource => ({ name: str(s.name), repo: strOrNull(s.repo), path: str(s.path), provides: strs(s.provides) });
 
 /** The field as the tab reads it: absent (an older engine), the engine's own error, or the view with every part
@@ -114,6 +119,7 @@ export function readPluginsView(raw: unknown): PluginsData {
         notes: list(e.notes).map(note),
       };
     }),
+    publisher: obj(raw.publisher) && str(raw.publisher.env) ? { env: str(raw.publisher.env), name: str(raw.publisher.name) || str(raw.publisher.env) } : null,
   };
   return { kind: "ok", view };
 }
@@ -177,8 +183,9 @@ const REPO_VIS: Record<RepoVisibility, string> = { public: "public", private: "p
 const UNKNOWN_MEANS = "Nobody could tell whether this repository is public or private, so the page cannot confirm that private content stays private.";
 const PROVIDES: Record<string, string> = { rules: "rules", docs: "docs", hooks: "hooks", skills: "skills", company_skills: "company skills" };
 const TRANSPORT: Record<string, string> = { local: "reads on this machine", "remote-exec": "sent over from this machine", "cloud-hosted": "cloud-hosted" };
-const BUILD: Record<string, [string, string]> = { synced: ["synced", "built"], drift: ["drift", "built from old sources"], missing: ["missing", "not built"] };
-const PUBLISH: Record<string, [string, string]> = { pushed: ["synced", "pushed"], stale: ["drift", "repository has an old version"], not_pushed: ["drift", "not pushed"], local: ["none", "not pushed (stays here)"] };
+// "none" is a quiet mark: nothing to act on. With a publisher named, the quiet marks are left out (see generatorNode).
+const BUILD: Record<string, [string, string]> = { synced: ["synced", "built"], drift: ["drift", "built from old sources"], missing: ["missing", "not built"], elsewhere: ["none", "built on another machine"], not_needed: ["none", "no build needed here"] };
+const PUBLISH: Record<string, [string, string]> = { pushed: ["synced", "pushed"], stale: ["drift", "repository has an old version"], not_pushed: ["drift", "not pushed"], local: ["none", "not pushed (stays here)"], elsewhere: ["none", "pushed from another machine"] };
 
 const arrow = `<svg class="ic pv-arrow" viewBox="0 0 16 16" aria-hidden="true"><path d="M3 8h9.5M9 4.5 12.5 8 9 11.5"/></svg>`;
 const lock = `<svg class="ic" viewBox="0 0 16 16" aria-hidden="true"><rect x="3.5" y="7" width="9" height="6.5" rx="1.5"/><path d="M5.5 7V5.2a2.5 2.5 0 0 1 5 0V7"/></svg>`;
@@ -222,7 +229,9 @@ function repoLine(k: PluginsKit, r: PvRepo | null, fallback: string): string {
 /** `about`: the repository or environment the notes sit on, so a copied sentence says whose problem it is. */
 function notesHtml(k: PluginsKit, notes: PvNote[], about: string): string {
   if (!notes.length) return "";
-  return `<ul class="pv-notes">${notes.map((n) => `<li>${k.mark(n.state, n.text_zh)}${n.fix ? fixText(k, n.fix, `${about}: ${n.text_zh}`) : ""}</li>`).join("")}</ul>`;
+  // a fix done on another machine is only said: a button here would copy something this machine must not run
+  const fix = (n: PvNote) => (!n.fix ? "" : n.at ? `<span class="pv-fix">${k.esc(n.fix)}</span>` : fixText(k, n.fix, `${about}: ${n.text_zh}`));
+  return `<ul class="pv-notes">${notes.map((n) => `<li>${k.mark(n.state, n.text_zh)}${fix(n)}</li>`).join("")}</ul>`;
 }
 
 function sourceNode(k: PluginsKit, v: PluginsView, s: PvSource): string {
@@ -234,12 +243,17 @@ function generatorNode(k: PluginsKit, v: PluginsView): string {
   const g = v.generator;
   if (!g) return "";
   const own = g.provides.length ? `<p class="pv-what">${k.esc(k.t("Also keeps: {what}", { what: g.provides.map((p) => k.t(PROVIDES[p] ?? p)).join(k.lang === "zh" ? "、" : ", ") }))}</p>` : "";
+  // another machine builds and publishes: the sentence above the flow says so once, so a plugin's line keeps only
+  // what this machine can see is wrong or right, and the build folder (which is not on this machine) is left out
+  const away = v.publisher !== null;
   const plugins = v.plugins.map((p) => {
     const [bs, bw] = BUILD[p.build.state] ?? ["unknown", "build state unknown"];
     const [ps, pw] = PUBLISH[p.publish.state] ?? ["unknown", "publish state unknown"];
-    return `<li class="pv-plugin"><span class="pv-pl-h"><span class="pv-pl">${k.esc(p.name)}</span><span class="pv-tag" data-tip="${k.esc(k.t(VIS_TIP[p.visibility]))}">${k.esc(k.t(VIS_LABEL[p.visibility]))}</span></span><span class="pv-pl-s">${k.mark(bs, k.t(bw), p.build.detail)}${k.mark(ps, k.t(pw), p.publish.detail)}</span>${p.build.fix ? fixText(k, p.build.fix, `${p.name}: ${k.t(bw)}`) : ""}</li>`;
+    const marks = [[bs, bw, p.build.detail], [ps, pw, p.publish.detail]].filter(([state]) => !(away && state === "none")).map(([state, word, tip]) => k.mark(state, k.t(word), tip)).join("");
+    return `<li class="pv-plugin"><span class="pv-pl-h"><span class="pv-pl">${k.esc(p.name)}</span><span class="pv-tag" data-tip="${k.esc(k.t(VIS_TIP[p.visibility]))}">${k.esc(k.t(VIS_LABEL[p.visibility]))}</span></span>${marks ? `<span class="pv-pl-s">${marks}</span>` : ""}${p.build.fix ? fixText(k, p.build.fix, `${p.name}: ${k.t(bw)}`) : ""}</li>`;
   }).join("");
-  return `<li class="pv-node">${repoLine(k, repoOf(v, g.repo), g.name)}<p class="pv-sub">${k.esc(k.t("Builds into {path}", { path: g.output }))}</p>${k.file(g.output)}${own}${plugins ? `<ul class="pv-plugins">${plugins}</ul>` : `<p class="pv-sub">${k.esc(k.t("No plugins defined"))}</p>`}</li>`;
+  const output = away ? "" : `<p class="pv-sub">${k.esc(k.t("Builds into {path}", { path: g.output }))}</p>${k.file(g.output)}`;
+  return `<li class="pv-node">${repoLine(k, repoOf(v, g.repo), g.name)}${output}${own}${plugins ? `<ul class="pv-plugins">${plugins}</ul>` : `<p class="pv-sub">${k.esc(k.t("No plugins defined"))}</p>`}</li>`;
 }
 
 function repoNode(k: PluginsKit, v: PluginsView, c: PvPluginRepo): string {
@@ -320,7 +334,10 @@ export function pluginsHtml(k: PluginsKit, data: PluginsData): string {
     : k.t("Public or private: never checked");
   const unknown = v.repos.filter((r) => r.visibility === "unknown").length;
   const bar = `<div class="viewbar pv-bar"><p class="pv-checked">${k.esc(checked)}${unknown ? `<span class="pv-unknown-n">${k.esc(k.t("{n} could not be checked", { n: unknown }))}</span>` : ""}<span class="pv-refresh">${k.esc(k.t("Check again:"))}</span>${copyLine(k, k.t("check again whether each repository is public or private"), v.refresh_command)}</p><span class="pv-acts">${k.aiButton}</span></div>`;
-  return `<div class="pv" data-pv="ok">${bar}<section class="pv-sec" aria-labelledby="pv-flow-h"><h2 class="pv-h" id="pv-flow-h">${k.esc(k.t("From source to environment"))}</h2>${flowHtml(k, v)}</section><section class="pv-sec" aria-labelledby="pv-gets-h"><h2 class="pv-h" id="pv-gets-h">${k.esc(k.t("What each environment gets"))}</h2>${tableHtml(k, v)}</section></div>`;
+  const away = v.publisher
+    ? `<p class="pv-away" data-pv-publisher="${k.esc(v.publisher.env)}">${k.esc(k.t("Plugins are built and published on {name}. This computer only uses them; there is nothing to build or push here.", { name: v.publisher.name }))}</p>`
+    : "";
+  return `<div class="pv" data-pv="ok">${bar}${away}<section class="pv-sec" aria-labelledby="pv-flow-h"><h2 class="pv-h" id="pv-flow-h">${k.esc(k.t("From source to environment"))}</h2>${flowHtml(k, v)}</section><section class="pv-sec" aria-labelledby="pv-gets-h"><h2 class="pv-h" id="pv-gets-h">${k.esc(k.t("What each environment gets"))}</h2>${tableHtml(k, v)}</section></div>`;
 }
 
 /** Styles of the tab; page.ts adds them to its one CSS string. Same tokens and rhythm as the other views; colour
@@ -334,6 +351,8 @@ export const PLUGINS_CSS = `
   .pv-acts { display: flex; gap: 8px; margin-left: auto; }
   .pv-cmd { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 4px; min-width: 0; max-width: 100%; }
   .pv-cmd code { padding: 0 4px; border-radius: 4px; background: var(--kit-surface-muted, #f4f4f4); overflow-wrap: break-word; }
+  /* one sentence above the flow on a machine that only uses the plugins: plain text, wraps at any width */
+  .pv-away { margin: 0 0 20px; font-size: 13px; line-height: 20px; color: var(--kit-text, inherit); overflow-wrap: anywhere; }
   .pv-sec + .pv-sec { margin-top: 40px; }
   .pv-h { margin-bottom: 12px; font-size: 15px; font-weight: 600; line-height: 20px; }
   .pv-flow { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 24px; align-items: start; }

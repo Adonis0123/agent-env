@@ -92,7 +92,7 @@ description: Runbook for the agent habit engine (agent-env) on Mac, WSL or a rem
 
 本机写不进去的落点（清单 `[environments.<名字>] transport = "cloud-hosted"`，如 `grok-bot`）自己去取插件：每个插件是一个带可见性（公开 / 个人 / 公司 / 本机）的仓库，落点按 `plugins = [...]` 的顺序拉，后面的覆盖前面的。设计见 `docs/plugins-design.md`，机器事实见 `profiles/<环境>/README.md`。
 
-用户只说自然语言（「发布规则」「同步 Grok Bot」「看看各环境状态」），命令由你跑：
+用户只说自然语言（「发布规则」「同步 Grok Bot」「看看各环境状态」），命令由你跑。清单顶层写了 `publish_from = "<环境>"` 时，只有那台机器生成并发布插件：在别的机器上不要跑 `plugin build` / `plugin publish`（两台机器会往同一批插件仓推送），面板「插件」页签写着「到 <那台机器> 上让 AI 发布」、待办里写着「到 <那台机器> 上处理」的事（`issues[].at`），告诉用户去那台机器上处理：
 
 | 用户说 | 你做 |
 | --- | --- |

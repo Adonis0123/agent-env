@@ -4,6 +4,10 @@ Design: docs/plugins-design.md; decision: docs/adr/0005-targets-pull-plugins.md;
 Manifest contract:
 
   plugin_owner = "<name>"                     # author of the plugins (.claude-plugin/*.json); no email
+  publish_from = "mac"                        # optional: the [environments.<name>] whose machine builds and
+                                              # publishes the plugins. On every other machine the panel and
+                                              # doctor stop reporting builds and pushes as missing: they are
+                                              # not that machine's to do (see published_away)
 
   [sources]
   skills = "~/.agents/skills"                 # own skills: copied into a plugin
@@ -101,8 +105,8 @@ import company_skills
 import frontmatter
 import render
 import vendor
-from habits import (MANIFEST_PATH_KEY, PREAMBLE_KEY, TEXT, _scan_lines, normalize, parse_sections, rules_src_files,
-                    suspect_headings, unclosed_fence)
+from habits import (MANIFEST_PATH_KEY, PREAMBLE_KEY, TEXT, _scan_lines, machine_env, normalize, parse_sections,
+                    rules_src_files, suspect_headings, unclosed_fence)
 from state import state_dir
 
 VISIBILITY = {"public": "公开", "personal": "个人", "company": "公司", "local": "本机"}
@@ -120,6 +124,13 @@ DEFAULT_VERSION = "0.1.0"
 WARN_DAYS = 7
 PRESERVE = (".git",)  # kept across rebuilds once the output is a repository clone (phase 2)
 LEDGER_STEPS = ("build", "scan", "commit", "push")
+PUBLISH_FROM = "publish_from"
+# Key under which a run records the environment this machine is (agent_env.doctor): every check of that run,
+# also those of a remote or cloud-hosted environment, then judges builds and pushes as that one machine.
+MACHINE_KEY = "__machine_env__"
+# a fix that names a command only the publish_from machine runs: building, publishing, or writing the pointer
+# rule that is made from the builds
+PUBLISHER_COMMAND_RE = re.compile(r"\bplugin (?:build|publish|pointer)\b")
 OLD_RENDER_FIELDS = ("render", "output", "also_output", "supplement", "skills")
 
 # Files that store credentials are never copied into a plugin, whatever they contain. The repo had no
@@ -254,6 +265,65 @@ def is_cloud(manifest: dict, env) -> bool:
 def target_plugins(target: dict) -> list:
     p = target.get("plugins")
     return [x for x in p if isinstance(x, str)] if isinstance(p, list) else []
+
+
+def publisher(manifest: dict) -> str | None:
+    """`publish_from`: the environment whose machine builds and publishes the plugins. None when the manifest
+    does not say, or says something `check` refuses (publish_from_errors); then every machine judges its own
+    builds and publish records, as before."""
+    v = manifest.get(PUBLISH_FROM)
+    return v if isinstance(v, str) and v and not publish_from_errors(manifest) else None
+
+
+def publish_from_errors(manifest: dict) -> list:
+    """(message, fix) pairs for the top-level `publish_from`."""
+    if PUBLISH_FROM not in manifest:
+        return []
+    v, envs = manifest[PUBLISH_FROM], manifest.get("environments")
+    names = sorted(n for n, s in envs.items() if isinstance(s, dict) and "transport" not in s) \
+        if isinstance(envs, dict) else []
+    one_of = f"改成 {names} 之一" if names else "先在清单登记 [environments.<名字>]"
+    if not isinstance(v, str) or not v:
+        return [(f"顶层的 {PUBLISH_FROM} 不是环境名", f"写成负责生成并发布插件的那台机器的环境名，{one_of}，或删掉这一行")]
+    if not isinstance(envs, dict) or v not in envs:
+        return [(f"顶层的 {PUBLISH_FROM}={v!r} 不是 [environments] 里的环境", f"{one_of}，或删掉这一行")]
+    if v not in names:
+        return [(f"顶层的 {PUBLISH_FROM}={v!r} 是远程或云端托管环境，它不能生成和发布插件",
+                 f"{one_of}（你自己的机器，不写 transport 的环境），或删掉这一行")]
+    return []
+
+
+def acting_env(manifest: dict, env=None) -> str | None:
+    """The environment this machine is while it checks `env`. What the run recorded (MACHINE_KEY) wins: a
+    cloud-hosted environment checked inside `status --env mac --all` is checked by mac, whatever else matches
+    this machine. Without a record: `env` itself when it is one of the user's own machines (no transport; also
+    when --env names it), else the first environment this machine matches (habits.machine_env), else None."""
+    here = manifest.get(MACHINE_KEY)
+    if isinstance(here, str) and here:
+        return here
+    spec = manifest["environments"].get(env) if isinstance(manifest.get("environments"), dict) \
+        and isinstance(env, str) else None
+    return env if isinstance(spec, dict) and "transport" not in spec else machine_env(manifest)
+
+
+def needs_publisher(fix) -> bool:
+    """True when a fix, a bare command or a sentence, names a command of the publishing machine
+    (PUBLISHER_COMMAND_RE): `plugin build`, `plugin publish` or `plugin pointer`."""
+    return isinstance(fix, str) and bool(PUBLISHER_COMMAND_RE.search(fix))
+
+
+def published_away(manifest: dict, env=None) -> dict | None:
+    """Who builds and publishes the plugins when this machine does not: {"env", "name"} of `publish_from`
+    (name: its [env_names] display name). None when this machine is that environment (acting_env), or the
+    manifest names none. `env` is the environment being checked."""
+    pub = publisher(manifest)
+    if pub is None:
+        return None
+    if acting_env(manifest, env) == pub:
+        return None
+    names = manifest.get("env_names")
+    shown = names.get(pub) if isinstance(names, dict) else None
+    return {"env": pub, "name": shown if isinstance(shown, str) and shown else pub}
 
 
 def read_lock(manifest: dict) -> dict:

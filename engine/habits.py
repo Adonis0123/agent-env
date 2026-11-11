@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import os
 import re
+import sys
 import tomllib
 from pathlib import Path
 
@@ -56,6 +57,29 @@ def load_manifest(path) -> dict:
 
 # Key under which load_manifest records the manifest's own resolved path.
 MANIFEST_PATH_KEY = "__manifest_path__"
+
+
+def _is_wsl() -> bool:
+    try:
+        return "microsoft" in Path("/proc/version").read_text(encoding="utf-8", errors="replace").lower()
+    except OSError:
+        return False
+
+
+def _env_matches(spec) -> bool:
+    if not isinstance(spec, dict) or not isinstance(spec.get("platform"), str):
+        return False
+    if not sys.platform.startswith(spec["platform"]):
+        return False
+    if "wsl" in spec and bool(spec["wsl"]) != _is_wsl():
+        return False
+    return True
+
+
+def machine_env(manifest: dict) -> str | None:
+    """The first [environments.<name>] this machine matches (platform, wsl); None when none does."""
+    envs = manifest.get("environments")
+    return next((n for n, spec in envs.items() if _env_matches(spec)), None) if isinstance(envs, dict) else None
 
 
 # CommonMark fenced code: up to 3 spaces of indent, then 3+ backticks or tildes.

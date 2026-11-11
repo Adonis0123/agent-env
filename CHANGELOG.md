@@ -21,6 +21,17 @@ All notable changes to this project are listed here. Versions follow [Semantic V
 - `plugin vendor-diff --plugin <p> --skill <s>`: compare a vendored skill's local copy with upstream HEAD (network),
   print the diff, and with `--write-license` save the upstream license. Updating stays manual: merge upstream into
   the local copy, then rebuild.
+- `publish_from = "<environment>"` at the top of the manifest names the one machine that builds and publishes the
+  plugins. On every other machine the panel's 插件 tab says once who publishes ("插件由 Mac 生成并发布。这台电脑只使用，
+  不用在这里生成或推送。"), shows no 未生成 / 未推送 and no `plugin build` / `plugin publish` to copy, and a `plugins`
+  expectation reports a build it cannot judge as unknown, so nothing lands in the to-do list. An empty repository
+  still shows, with "到 Mac 上让 AI 发布" as words instead of a command. What only the publishing machine can
+  fix (a pointer rule not delivered, a remote that pulled older rules, the publishing machine's own missing
+  builds) stays in the to-do list on the other machines as "到 Mac 上处理": the issue carries `at`, has one step
+  without a command, and the panel shows no copy or AI button for it. A wrong manifest entry keeps its own fix.
+  `--env` decides which machine a run is, also for the cloud-hosted environments checked along with it. Without
+  the key, and on the publishing machine, nothing changes (the manifest check lists the key as one more passed
+  line). `check` refuses a value that is not one of the user's own environments.
 - `profiles/_template/starter/`: a first personal layer (one machine, one agent host) with a `bin/agent-env`
   wrapper that runs the engine cloned into `vendor/agent-env/`.
 - Panel: every copy button copies a plain sentence for an AI agent ("Copy for AI") instead of a command: what to

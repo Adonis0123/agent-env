@@ -1,0 +1,1283 @@
+{
+  "schema": 1,
+  "generated_at": "2026-11-09T08:00:00Z",
+  "environments": [
+    {
+      "schema": 1,
+      "env": "wsl",
+      "source": "live",
+      "generated_at": "2026-11-09T07:30:00Z",
+      "engine_rev": "",
+      "summary": {
+        "synced": 1,
+        "customized": 1,
+        "drift": 0,
+        "missing": 0,
+        "unknown": 0
+      },
+      "check": {
+        "pass": 30,
+        "warn": 1,
+        "fail": 0
+      },
+      "targets": [
+        {
+          "id": "wsl/claude-code",
+          "host": "claude-code",
+          "env": "wsl",
+          "roles": [
+            "cli"
+          ],
+          "verified": true,
+          "host_version": null,
+          "habits": [
+            {
+              "kind": "rules",
+              "name": "AGENTS.md 合成",
+              "state": "customized",
+              "layer": "env",
+              "detail": "~/.claude/AGENTS.md 与插件 demo-public → demo-personal → demo-wsl 合成的结果一致（含补丁层 demo-wsl），哈希 4a81b4c1a3e2",
+              "fix": "",
+              "expect_kind": "composed",
+              "origin": "rules"
+            }
+          ]
+        },
+        {
+          "id": "wsl/codex",
+          "host": "codex",
+          "env": "wsl",
+          "roles": [
+            "cli"
+          ],
+          "verified": true,
+          "host_version": null,
+          "habits": [
+            {
+              "kind": "rules",
+              "name": "AGENTS.md",
+              "state": "synced",
+              "layer": "host",
+              "detail": "~/.codex/AGENTS.md 链接到 ~/.claude/AGENTS.md",
+              "fix": "",
+              "expect_kind": "link",
+              "origin": "rules"
+            }
+          ]
+        }
+      ],
+      "eval": {
+        "ran_at": null,
+        "results": []
+      },
+      "issues": []
+    },
+    {
+      "schema": 1,
+      "env": "grok-bot",
+      "source": "branch",
+      "generated_at": "2026-11-09T07:30:00Z",
+      "engine_rev": "",
+      "summary": {
+        "synced": 1,
+        "customized": 0,
+        "drift": 0,
+        "missing": 2,
+        "unknown": 0
+      },
+      "check": {
+        "pass": 30,
+        "warn": 1,
+        "fail": 0
+      },
+      "targets": [
+        {
+          "id": "grok-bot/bot",
+          "host": "grok-bot",
+          "env": "grok-bot",
+          "roles": [
+            "remote"
+          ],
+          "verified": false,
+          "host_version": null,
+          "habits": [
+            {
+              "kind": "rules",
+              "name": "指路规则",
+              "state": "missing",
+              "layer": "host",
+              "detail": "没有投递记录；当前内容哈希 a13805f72811。云端内容本身读不到",
+              "fix": "bin/agent-env plugin pointer --target grok-bot/bot 输出指路规则，由你在该 app 里存进它的 memory 并确认后，运行 bin/agent-env plugin pointer --target grok-bot/bot --record",
+              "expect_kind": "delivered",
+              "origin": "rules"
+            },
+            {
+              "kind": "rules",
+              "name": "插件 demo-public（公开）",
+              "state": "missing",
+              "layer": "host",
+              "detail": "~/.local/state/agent-env/plugins/demo-public 还没生成",
+              "fix": "bin/agent-env plugin build --plugin demo-public",
+              "expect_kind": "plugins",
+              "origin": "rules"
+            },
+            {
+              "kind": "rules",
+              "name": "插件 token",
+              "state": "synced",
+              "layer": "host",
+              "detail": "只用公开插件，不需要 token",
+              "fix": "",
+              "expect_kind": "token",
+              "origin": "manifest"
+            }
+          ]
+        }
+      ],
+      "eval": {
+        "ran_at": null,
+        "results": []
+      },
+      "checked_from": "mac",
+      "issues": [
+        {
+          "id": "grok-bot/bot:rules:指路规则",
+          "env": "grok-bot",
+          "target": "grok-bot/bot",
+          "category": "habit",
+          "state": "missing",
+          "actor": "other_env",
+          "title_zh": "Grok Bot 的指路规则还没投递",
+          "impact_zh": "Grok Bot 还没收到这份规则，新加的规则它不知道",
+          "steps": [
+            {
+              "who": "other_env",
+              "text_zh": "到 Mac 上让 AI 处理：在那台电脑的环境面板里打开这条待办，按那里的步骤做。生成和发布插件只在 Mac 上做，这台电脑不做",
+              "command": null,
+              "confirm": false
+            }
+          ],
+          "ai_task": null,
+          "ref": {
+            "kind": "rules",
+            "name": "指路规则",
+            "case": null,
+            "detail": "没有投递记录；当前内容哈希 a13805f72811。云端内容本身读不到"
+          },
+          "at": {
+            "env": "mac",
+            "name": "Mac"
+          }
+        },
+        {
+          "id": "grok-bot/bot:rules:插件 demo-public（公开）",
+          "env": "grok-bot",
+          "target": "grok-bot/bot",
+          "category": "habit",
+          "state": "missing",
+          "actor": "other_env",
+          "title_zh": "Grok Bot 要拉的规则还没生成",
+          "impact_zh": "Grok Bot 拉不到这个插件的内容",
+          "steps": [
+            {
+              "who": "other_env",
+              "text_zh": "到 Mac 上让 AI 处理：在那台电脑的环境面板里打开这条待办，按那里的步骤做。生成和发布插件只在 Mac 上做，这台电脑不做",
+              "command": null,
+              "confirm": false
+            }
+          ],
+          "ai_task": null,
+          "ref": {
+            "kind": "rules",
+            "name": "插件 demo-public（公开）",
+            "case": null,
+            "detail": "~/.local/state/agent-env/plugins/demo-public 还没生成"
+          },
+          "at": {
+            "env": "mac",
+            "name": "Mac"
+          }
+        }
+      ]
+    },
+    {
+      "schema": 1,
+      "env": "mac",
+      "source": "branch",
+      "generated_at": "2026-11-09T07:30:00Z",
+      "engine_rev": "",
+      "summary": {
+        "synced": 3,
+        "customized": 2,
+        "drift": 0,
+        "missing": 3,
+        "unknown": 0
+      },
+      "check": {
+        "pass": 30,
+        "warn": 1,
+        "fail": 0
+      },
+      "targets": [
+        {
+          "id": "mac/claude-code",
+          "host": "claude-code",
+          "env": "mac",
+          "roles": [
+            "cli"
+          ],
+          "verified": true,
+          "host_version": {
+            "recorded": "2.1.0",
+            "current": "2.1.0",
+            "changed": false
+          },
+          "habits": [
+            {
+              "kind": "rules",
+              "name": "AGENTS.md",
+              "state": "synced",
+              "layer": "host",
+              "detail": "~/.claude/CLAUDE.md 含 `@AGENTS.md`",
+              "fix": "",
+              "expect_kind": "contains",
+              "origin": "rules"
+            },
+            {
+              "kind": "rules",
+              "name": "AGENTS.md 合成",
+              "state": "customized",
+              "layer": "env",
+              "detail": "~/.claude/AGENTS.md 与插件 demo-public → demo-personal → demo-mac 合成的结果一致（含补丁层 demo-mac），哈希 8f4041dfe157",
+              "fix": "",
+              "expect_kind": "composed",
+              "origin": "rules"
+            },
+            {
+              "kind": "rules",
+              "name": "插件 demo-public（公开）",
+              "state": "missing",
+              "layer": "host",
+              "detail": "~/.local/state/agent-env/plugins/demo-public 还没生成",
+              "fix": "bin/agent-env plugin build --plugin demo-public",
+              "expect_kind": "plugins",
+              "origin": "rules"
+            },
+            {
+              "kind": "rules",
+              "name": "插件 demo-personal（个人）",
+              "state": "missing",
+              "layer": "host",
+              "detail": "~/.local/state/agent-env/plugins/demo-personal 还没生成",
+              "fix": "bin/agent-env plugin build --plugin demo-personal",
+              "expect_kind": "plugins",
+              "origin": "rules"
+            },
+            {
+              "kind": "rules",
+              "name": "插件 demo-mac（本机）",
+              "state": "missing",
+              "layer": "host",
+              "detail": "~/.local/state/agent-env/plugins/demo-mac 还没生成",
+              "fix": "bin/agent-env plugin build --plugin demo-mac",
+              "expect_kind": "plugins",
+              "origin": "rules"
+            }
+          ]
+        },
+        {
+          "id": "mac/codex",
+          "host": "codex",
+          "env": "mac",
+          "roles": [
+            "cli"
+          ],
+          "verified": true,
+          "host_version": {
+            "recorded": "0.160.0",
+            "current": "0.160.0",
+            "changed": false
+          },
+          "habits": [
+            {
+              "kind": "rules",
+              "name": "AGENTS.md",
+              "state": "synced",
+              "layer": "host",
+              "detail": "~/.codex/AGENTS.md 链接到 ~/.claude/AGENTS.md",
+              "fix": "",
+              "expect_kind": "link",
+              "origin": "rules"
+            }
+          ]
+        },
+        {
+          "id": "mac/pi",
+          "host": "pi",
+          "env": "mac",
+          "roles": [
+            "cli"
+          ],
+          "verified": true,
+          "host_version": {
+            "recorded": "1.5.0",
+            "current": "1.5.0",
+            "changed": false
+          },
+          "habits": [
+            {
+              "kind": "rules",
+              "name": "AGENTS.md",
+              "state": "synced",
+              "layer": "host",
+              "detail": "~/.pi/agent/AGENTS.md 链接到 ~/.claude/AGENTS.md",
+              "fix": "",
+              "expect_kind": "link",
+              "origin": "rules"
+            }
+          ]
+        },
+        {
+          "id": "mac/hermes",
+          "host": "hermes",
+          "env": "mac",
+          "roles": [
+            "bot",
+            "cron"
+          ],
+          "verified": true,
+          "host_version": null,
+          "habits": [
+            {
+              "kind": "rules",
+              "name": ".hermes.md",
+              "state": "customized",
+              "layer": "env",
+              "detail": "~/.hermes.md 与生成结果一致（含本落点档案）",
+              "fix": "",
+              "expect_kind": "generated",
+              "origin": "rules"
+            }
+          ]
+        }
+      ],
+      "eval": {
+        "ran_at": null,
+        "results": []
+      },
+      "issues": [
+        {
+          "id": "mac/claude-code:rules:插件 demo-mac（本机）",
+          "env": "mac",
+          "target": "mac/claude-code",
+          "category": "habit",
+          "state": "missing",
+          "actor": "other_env",
+          "title_zh": "Claude Code 要拉的规则还没生成",
+          "impact_zh": "Claude Code 拉不到这个插件的内容",
+          "steps": [
+            {
+              "who": "other_env",
+              "text_zh": "到 Mac 上让 AI 处理：在那台电脑的环境面板里打开这条待办，按那里的步骤做。生成和发布插件只在 Mac 上做，这台电脑不做",
+              "command": null,
+              "confirm": false
+            }
+          ],
+          "ai_task": null,
+          "ref": {
+            "kind": "rules",
+            "name": "插件 demo-mac（本机）",
+            "case": null,
+            "detail": "~/.local/state/agent-env/plugins/demo-mac 还没生成"
+          },
+          "at": {
+            "env": "mac",
+            "name": "Mac"
+          }
+        },
+        {
+          "id": "mac/claude-code:rules:插件 demo-personal（个人）",
+          "env": "mac",
+          "target": "mac/claude-code",
+          "category": "habit",
+          "state": "missing",
+          "actor": "other_env",
+          "title_zh": "Claude Code 要拉的规则还没生成",
+          "impact_zh": "Claude Code 拉不到这个插件的内容",
+          "steps": [
+            {
+              "who": "other_env",
+              "text_zh": "到 Mac 上让 AI 处理：在那台电脑的环境面板里打开这条待办，按那里的步骤做。生成和发布插件只在 Mac 上做，这台电脑不做",
+              "command": null,
+              "confirm": false
+            }
+          ],
+          "ai_task": null,
+          "ref": {
+            "kind": "rules",
+            "name": "插件 demo-personal（个人）",
+            "case": null,
+            "detail": "~/.local/state/agent-env/plugins/demo-personal 还没生成"
+          },
+          "at": {
+            "env": "mac",
+            "name": "Mac"
+          }
+        },
+        {
+          "id": "mac/claude-code:rules:插件 demo-public（公开）",
+          "env": "mac",
+          "target": "mac/claude-code",
+          "category": "habit",
+          "state": "missing",
+          "actor": "other_env",
+          "title_zh": "Claude Code 要拉的规则还没生成",
+          "impact_zh": "Claude Code 拉不到这个插件的内容",
+          "steps": [
+            {
+              "who": "other_env",
+              "text_zh": "到 Mac 上让 AI 处理：在那台电脑的环境面板里打开这条待办，按那里的步骤做。生成和发布插件只在 Mac 上做，这台电脑不做",
+              "command": null,
+              "confirm": false
+            }
+          ],
+          "ai_task": null,
+          "ref": {
+            "kind": "rules",
+            "name": "插件 demo-public（公开）",
+            "case": null,
+            "detail": "~/.local/state/agent-env/plugins/demo-public 还没生成"
+          },
+          "at": {
+            "env": "mac",
+            "name": "Mac"
+          }
+        }
+      ]
+    }
+  ],
+  "errors": [],
+  "issues": [
+    {
+      "id": "grok-bot/bot:rules:指路规则",
+      "env": "grok-bot",
+      "target": "grok-bot/bot",
+      "category": "habit",
+      "state": "missing",
+      "actor": "other_env",
+      "title_zh": "Grok Bot 的指路规则还没投递",
+      "impact_zh": "Grok Bot 还没收到这份规则，新加的规则它不知道",
+      "steps": [
+        {
+          "who": "other_env",
+          "text_zh": "到 Mac 上让 AI 处理：在那台电脑的环境面板里打开这条待办，按那里的步骤做。生成和发布插件只在 Mac 上做，这台电脑不做",
+          "command": null,
+          "confirm": false
+        }
+      ],
+      "ai_task": null,
+      "ref": {
+        "kind": "rules",
+        "name": "指路规则",
+        "case": null,
+        "detail": "没有投递记录；当前内容哈希 a13805f72811。云端内容本身读不到"
+      },
+      "at": {
+        "env": "mac",
+        "name": "Mac"
+      }
+    },
+    {
+      "id": "grok-bot/bot:rules:插件 demo-public（公开）",
+      "env": "grok-bot",
+      "target": "grok-bot/bot",
+      "category": "habit",
+      "state": "missing",
+      "actor": "other_env",
+      "title_zh": "Grok Bot 要拉的规则还没生成",
+      "impact_zh": "Grok Bot 拉不到这个插件的内容",
+      "steps": [
+        {
+          "who": "other_env",
+          "text_zh": "到 Mac 上让 AI 处理：在那台电脑的环境面板里打开这条待办，按那里的步骤做。生成和发布插件只在 Mac 上做，这台电脑不做",
+          "command": null,
+          "confirm": false
+        }
+      ],
+      "ai_task": null,
+      "ref": {
+        "kind": "rules",
+        "name": "插件 demo-public（公开）",
+        "case": null,
+        "detail": "~/.local/state/agent-env/plugins/demo-public 还没生成"
+      },
+      "at": {
+        "env": "mac",
+        "name": "Mac"
+      }
+    },
+    {
+      "id": "mac/claude-code:rules:插件 demo-mac（本机）",
+      "env": "mac",
+      "target": "mac/claude-code",
+      "category": "habit",
+      "state": "missing",
+      "actor": "other_env",
+      "title_zh": "Claude Code 要拉的规则还没生成",
+      "impact_zh": "Claude Code 拉不到这个插件的内容",
+      "steps": [
+        {
+          "who": "other_env",
+          "text_zh": "到 Mac 上让 AI 处理：在那台电脑的环境面板里打开这条待办，按那里的步骤做。生成和发布插件只在 Mac 上做，这台电脑不做",
+          "command": null,
+          "confirm": false
+        }
+      ],
+      "ai_task": null,
+      "ref": {
+        "kind": "rules",
+        "name": "插件 demo-mac（本机）",
+        "case": null,
+        "detail": "~/.local/state/agent-env/plugins/demo-mac 还没生成"
+      },
+      "at": {
+        "env": "mac",
+        "name": "Mac"
+      }
+    },
+    {
+      "id": "mac/claude-code:rules:插件 demo-personal（个人）",
+      "env": "mac",
+      "target": "mac/claude-code",
+      "category": "habit",
+      "state": "missing",
+      "actor": "other_env",
+      "title_zh": "Claude Code 要拉的规则还没生成",
+      "impact_zh": "Claude Code 拉不到这个插件的内容",
+      "steps": [
+        {
+          "who": "other_env",
+          "text_zh": "到 Mac 上让 AI 处理：在那台电脑的环境面板里打开这条待办，按那里的步骤做。生成和发布插件只在 Mac 上做，这台电脑不做",
+          "command": null,
+          "confirm": false
+        }
+      ],
+      "ai_task": null,
+      "ref": {
+        "kind": "rules",
+        "name": "插件 demo-personal（个人）",
+        "case": null,
+        "detail": "~/.local/state/agent-env/plugins/demo-personal 还没生成"
+      },
+      "at": {
+        "env": "mac",
+        "name": "Mac"
+      }
+    },
+    {
+      "id": "mac/claude-code:rules:插件 demo-public（公开）",
+      "env": "mac",
+      "target": "mac/claude-code",
+      "category": "habit",
+      "state": "missing",
+      "actor": "other_env",
+      "title_zh": "Claude Code 要拉的规则还没生成",
+      "impact_zh": "Claude Code 拉不到这个插件的内容",
+      "steps": [
+        {
+          "who": "other_env",
+          "text_zh": "到 Mac 上让 AI 处理：在那台电脑的环境面板里打开这条待办，按那里的步骤做。生成和发布插件只在 Mac 上做，这台电脑不做",
+          "command": null,
+          "confirm": false
+        }
+      ],
+      "ai_task": null,
+      "ref": {
+        "kind": "rules",
+        "name": "插件 demo-public（公开）",
+        "case": null,
+        "detail": "~/.local/state/agent-env/plugins/demo-public 还没生成"
+      },
+      "at": {
+        "env": "mac",
+        "name": "Mac"
+      }
+    }
+  ],
+  "glossary": {
+    "synced": {
+      "label_zh": "已同步",
+      "explain_zh": "和源一致，不用管"
+    },
+    "customized": {
+      "label_zh": "已定制",
+      "explain_zh": "按这台机器或这个 agent 的需要有意改过，是预期内的"
+    },
+    "drift": {
+      "label_zh": "不一致",
+      "explain_zh": "和清单期望的不一样，要修"
+    },
+    "missing": {
+      "label_zh": "缺失",
+      "explain_zh": "应该有但没有，要补"
+    },
+    "unknown": {
+      "label_zh": "未知",
+      "explain_zh": "没法核实，比如云端内容读不到或机器连不上"
+    },
+    "rules": {
+      "label_zh": "规则",
+      "explain_zh": "告诉 agent 怎么做事的说明文件，如 AGENTS.md"
+    },
+    "skills": {
+      "label_zh": "Skills",
+      "explain_zh": "agent 按需加载的技能包"
+    },
+    "hooks": {
+      "label_zh": "Hooks",
+      "explain_zh": "agent 做事前后自动跑的检查脚本"
+    },
+    "mcp": {
+      "label_zh": "MCP",
+      "explain_zh": "agent 能调用的外部工具服务"
+    },
+    "ai": {
+      "label_zh": "AI 能修",
+      "explain_zh": "让 AI 自己处理，写操作前会先问你"
+    },
+    "user": {
+      "label_zh": "要你处理",
+      "explain_zh": "要你亲手做或确认，比如登录、在 app 里存规则"
+    },
+    "other_env": {
+      "label_zh": "去另一台机器",
+      "explain_zh": "要到对应的机器上跑命令"
+    },
+    "notice": {
+      "label_zh": "提醒",
+      "explain_zh": "只是告诉你一声，通常不用动手"
+    },
+    "pass": {
+      "label_zh": "通过",
+      "explain_zh": "这次规则测试里 agent 守住了规则"
+    },
+    "fail": {
+      "label_zh": "没过",
+      "explain_zh": "agent 没守住规则"
+    },
+    "err": {
+      "label_zh": "出错",
+      "explain_zh": "规则测试工具自己出错，这次没测到，结论未核实"
+    },
+    "skip": {
+      "label_zh": "跳过",
+      "explain_zh": "这个用例不适用，或这个 agent 没法做规则测试"
+    },
+    "safety": {
+      "label_zh": "安全层",
+      "explain_zh": "安全底线相关的定制，优先级最高"
+    },
+    "env": {
+      "label_zh": "环境层",
+      "explain_zh": "因为所在机器不同而做的定制"
+    },
+    "role": {
+      "label_zh": "角色层",
+      "explain_zh": "因为 agent 角色不同（命令行、机器人、定时任务）而做的定制"
+    },
+    "host": {
+      "label_zh": "宿主层",
+      "explain_zh": "某个 agent 自己特有的定制"
+    }
+  },
+  "relations": {
+    "sources": {
+      "rules": "~/agent-env-demo/sources/agents-md",
+      "docs": "~/agent-env-demo/sources/docs",
+      "hooks": "~/agent-env-demo/sources/hooks",
+      "skills": "~/agent-env-demo/sources/skills",
+      "company_skills": "~/agent-env-demo/sources/company-skills",
+      "manifest": "~/agent-env-demo/manifest/habits.toml"
+    },
+    "env_sources": {},
+    "env_names": {
+      "mac": "Mac",
+      "wsl": "WSL",
+      "vps-helper": "小 helper的云主机",
+      "grok-bot": "Grok Bot"
+    },
+    "targets": [
+      {
+        "id": "mac/claude-code",
+        "env": "mac",
+        "host": "claude-code",
+        "name": "Claude Code",
+        "roles": [
+          "cli"
+        ]
+      },
+      {
+        "id": "mac/codex",
+        "env": "mac",
+        "host": "codex",
+        "name": "Codex",
+        "roles": [
+          "cli"
+        ]
+      },
+      {
+        "id": "mac/pi",
+        "env": "mac",
+        "host": "pi",
+        "name": "Pi",
+        "roles": [
+          "cli"
+        ]
+      },
+      {
+        "id": "mac/hermes",
+        "env": "mac",
+        "host": "hermes",
+        "name": "Hermes（小 bot）",
+        "roles": [
+          "bot",
+          "cron"
+        ]
+      },
+      {
+        "id": "wsl/claude-code",
+        "env": "wsl",
+        "host": "claude-code",
+        "name": "Claude Code",
+        "roles": [
+          "cli"
+        ]
+      },
+      {
+        "id": "wsl/codex",
+        "env": "wsl",
+        "host": "codex",
+        "name": "Codex",
+        "roles": [
+          "cli"
+        ]
+      },
+      {
+        "id": "vps-helper/hermes",
+        "env": "vps-helper",
+        "host": "hermes",
+        "name": "小 helper",
+        "roles": [
+          "bot",
+          "cron"
+        ]
+      },
+      {
+        "id": "grok-bot/bot",
+        "env": "grok-bot",
+        "host": "grok-bot",
+        "name": "Grok Bot",
+        "roles": [
+          "remote"
+        ]
+      }
+    ]
+  },
+  "plugins_view": {
+    "refresh_command": "bin/agent-env plugin repos --refresh",
+    "checked_at": "2026-11-09T07:30:00Z",
+    "repos": [
+      {
+        "key": "github.com/example-user/agent-plugin-public",
+        "name": "agent-plugin-public",
+        "url": "https://github.com/example-user/agent-plugin-public",
+        "host": "github.com",
+        "visibility": "public",
+        "empty": false,
+        "checked_at": "2026-11-09T07:30:00Z",
+        "detail": "",
+        "fix": ""
+      },
+      {
+        "key": "github.com/example-user/agent-plugin-personal",
+        "name": "agent-plugin-personal",
+        "url": "https://github.com/example-user/agent-plugin-personal",
+        "host": "github.com",
+        "visibility": "private",
+        "empty": true,
+        "checked_at": "2026-11-09T07:30:00Z",
+        "detail": "",
+        "fix": ""
+      },
+      {
+        "key": "git.example.com/example-user/agent-plugin-company",
+        "name": "agent-plugin-company",
+        "url": "https://git.example.com/example-user/agent-plugin-company",
+        "host": "git.example.com",
+        "visibility": "private",
+        "empty": null,
+        "checked_at": "2026-11-09T07:30:00Z",
+        "detail": "",
+        "fix": ""
+      }
+    ],
+    "sources": [
+      {
+        "name": "~/.claude/AGENTS.md",
+        "repo": null,
+        "path": "~/.claude/AGENTS.md",
+        "provides": [
+          "rules"
+        ]
+      },
+      {
+        "name": "~/agent-env-demo/sources/docs",
+        "repo": null,
+        "path": "~/agent-env-demo/sources/docs",
+        "provides": [
+          "docs"
+        ]
+      },
+      {
+        "name": "~/agent-env-demo/sources/hooks",
+        "repo": null,
+        "path": "~/agent-env-demo/sources/hooks",
+        "provides": [
+          "hooks"
+        ]
+      },
+      {
+        "name": "~/agent-env-demo/sources/skills",
+        "repo": null,
+        "path": "~/agent-env-demo/sources/skills",
+        "provides": [
+          "skills"
+        ]
+      },
+      {
+        "name": "~/agent-env-demo/sources/company-skills",
+        "repo": null,
+        "path": "~/agent-env-demo/sources/company-skills",
+        "provides": [
+          "company_skills"
+        ]
+      }
+    ],
+    "generator": {
+      "name": "agent-env",
+      "repo": null,
+      "path": "~/agent-env-demo",
+      "provides": [],
+      "output": "~/.local/state/agent-env/plugins"
+    },
+    "plugin_repos": [
+      {
+        "visibility": "public",
+        "visibility_zh": "公开",
+        "repo": "github.com/example-user/agent-plugin-public",
+        "plugins": [
+          "demo-public"
+        ],
+        "notes": []
+      },
+      {
+        "visibility": "personal",
+        "visibility_zh": "个人",
+        "repo": "github.com/example-user/agent-plugin-personal",
+        "plugins": [
+          "demo-personal"
+        ],
+        "notes": [
+          {
+            "code": "empty_repo",
+            "state": "drift",
+            "text_zh": "空仓",
+            "fix": "到 Mac 上让 AI 发布",
+            "at": "mac"
+          }
+        ]
+      },
+      {
+        "visibility": "company",
+        "visibility_zh": "公司",
+        "repo": "git.example.com/example-user/agent-plugin-company",
+        "plugins": [
+          "demo-company"
+        ],
+        "notes": []
+      }
+    ],
+    "plugins": [
+      {
+        "name": "demo-public",
+        "visibility": "public",
+        "visibility_zh": "公开",
+        "description": "Shared rules and a demo skill",
+        "repo": "https://github.com/example-user/agent-plugin-public",
+        "repo_key": "github.com/example-user/agent-plugin-public",
+        "build": {
+          "state": "elsewhere",
+          "detail": "由 Mac 生成并发布，这台机器不生成",
+          "fix": ""
+        },
+        "publish": {
+          "state": "elsewhere",
+          "detail": "由 Mac 推送，这台机器不推送",
+          "fix": "",
+          "pushed_at": null,
+          "steps": {}
+        }
+      },
+      {
+        "name": "demo-personal",
+        "visibility": "personal",
+        "visibility_zh": "个人",
+        "description": "The demo user's own workflow",
+        "repo": "https://github.com/example-user/agent-plugin-personal",
+        "repo_key": "github.com/example-user/agent-plugin-personal",
+        "build": {
+          "state": "elsewhere",
+          "detail": "由 Mac 生成并发布，这台机器不生成",
+          "fix": ""
+        },
+        "publish": {
+          "state": "elsewhere",
+          "detail": "由 Mac 推送，这台机器不推送",
+          "fix": "",
+          "pushed_at": null,
+          "steps": {}
+        }
+      },
+      {
+        "name": "demo-company",
+        "visibility": "company",
+        "visibility_zh": "公司",
+        "description": "Rules and skills for the team server",
+        "repo": "https://git.example.com/example-user/agent-plugin-company",
+        "repo_key": "git.example.com/example-user/agent-plugin-company",
+        "build": {
+          "state": "elsewhere",
+          "detail": "由 Mac 生成并发布，这台机器不生成",
+          "fix": ""
+        },
+        "publish": {
+          "state": "elsewhere",
+          "detail": "由 Mac 推送，这台机器不推送",
+          "fix": "",
+          "pushed_at": null,
+          "steps": {}
+        }
+      },
+      {
+        "name": "demo-mac",
+        "visibility": "local",
+        "visibility_zh": "本机",
+        "description": "Patch layer of the laptop: its document index",
+        "repo": null,
+        "repo_key": null,
+        "build": {
+          "state": "not_needed",
+          "detail": "补丁层：合成规则时直接读规则源，这台机器不用这份生成结果",
+          "fix": ""
+        },
+        "publish": {
+          "state": "local",
+          "detail": "本机插件（补丁层）不推送",
+          "fix": "",
+          "pushed_at": null,
+          "steps": {}
+        }
+      },
+      {
+        "name": "demo-wsl",
+        "visibility": "local",
+        "visibility_zh": "本机",
+        "description": "Patch layer of the WSL machine: its document index",
+        "repo": null,
+        "repo_key": null,
+        "build": {
+          "state": "not_needed",
+          "detail": "补丁层：合成规则时直接读规则源，这台机器不用这份生成结果",
+          "fix": ""
+        },
+        "publish": {
+          "state": "local",
+          "detail": "本机插件（补丁层）不推送",
+          "fix": "",
+          "pushed_at": null,
+          "steps": {}
+        }
+      }
+    ],
+    "environments": [
+      {
+        "env": "mac",
+        "name": "Mac",
+        "transport": "local",
+        "mode": "plugins",
+        "phase": null,
+        "now_zh": null,
+        "deny": [],
+        "targets": [
+          {
+            "id": "mac/claude-code",
+            "name": "Claude Code",
+            "plugins": [
+              "demo-public",
+              "demo-personal",
+              "demo-mac"
+            ]
+          },
+          {
+            "id": "mac/codex",
+            "name": "Codex",
+            "plugins": []
+          },
+          {
+            "id": "mac/pi",
+            "name": "Pi",
+            "plugins": []
+          },
+          {
+            "id": "mac/hermes",
+            "name": "Hermes（小 bot）",
+            "plugins": []
+          }
+        ],
+        "gets": {
+          "public": {
+            "state": "gets",
+            "plugins": [
+              "demo-public"
+            ]
+          },
+          "personal": {
+            "state": "gets",
+            "plugins": [
+              "demo-personal"
+            ]
+          },
+          "company": {
+            "state": "none",
+            "plugins": []
+          },
+          "local": {
+            "state": "gets",
+            "plugins": [
+              "demo-mac"
+            ]
+          }
+        },
+        "credential": {
+          "state": "none",
+          "name": null,
+          "expires": null,
+          "detail": "本机从规则源直接合成，不拉插件仓"
+        },
+        "notes": []
+      },
+      {
+        "env": "wsl",
+        "name": "WSL",
+        "transport": "local",
+        "mode": "plugins",
+        "phase": null,
+        "now_zh": null,
+        "deny": [],
+        "targets": [
+          {
+            "id": "wsl/claude-code",
+            "name": "Claude Code",
+            "plugins": [
+              "demo-public",
+              "demo-personal",
+              "demo-wsl"
+            ]
+          },
+          {
+            "id": "wsl/codex",
+            "name": "Codex",
+            "plugins": []
+          }
+        ],
+        "gets": {
+          "public": {
+            "state": "gets",
+            "plugins": [
+              "demo-public"
+            ]
+          },
+          "personal": {
+            "state": "gets",
+            "plugins": [
+              "demo-personal"
+            ]
+          },
+          "company": {
+            "state": "none",
+            "plugins": []
+          },
+          "local": {
+            "state": "gets",
+            "plugins": [
+              "demo-wsl"
+            ]
+          }
+        },
+        "credential": {
+          "state": "none",
+          "name": null,
+          "expires": null,
+          "detail": "本机从规则源直接合成，不拉插件仓"
+        },
+        "notes": []
+      },
+      {
+        "env": "vps-helper",
+        "name": "小 helper的云主机",
+        "transport": "remote-exec",
+        "mode": "plugins",
+        "phase": null,
+        "now_zh": null,
+        "deny": [
+          "personal"
+        ],
+        "targets": [
+          {
+            "id": "vps-helper/hermes",
+            "name": "小 helper",
+            "plugins": [
+              "demo-public",
+              "demo-company"
+            ]
+          }
+        ],
+        "gets": {
+          "public": {
+            "state": "gets",
+            "plugins": [
+              "demo-public"
+            ]
+          },
+          "personal": {
+            "state": "denied",
+            "plugins": []
+          },
+          "company": {
+            "state": "gets",
+            "plugins": [
+              "demo-company"
+            ]
+          },
+          "local": {
+            "state": "none",
+            "plugins": []
+          }
+        },
+        "credential": {
+          "state": "own",
+          "name": null,
+          "expires": null,
+          "detail": "用那台机器已有的 git 凭证"
+        },
+        "notes": []
+      },
+      {
+        "env": "grok-bot",
+        "name": "Grok Bot",
+        "transport": "cloud-hosted",
+        "mode": "plugins",
+        "phase": null,
+        "now_zh": null,
+        "deny": [
+          "company"
+        ],
+        "targets": [
+          {
+            "id": "grok-bot/bot",
+            "name": "Grok Bot",
+            "plugins": [
+              "demo-public"
+            ]
+          }
+        ],
+        "gets": {
+          "public": {
+            "state": "gets",
+            "plugins": [
+              "demo-public"
+            ]
+          },
+          "personal": {
+            "state": "none",
+            "plugins": []
+          },
+          "company": {
+            "state": "denied",
+            "plugins": []
+          },
+          "local": {
+            "state": "none",
+            "plugins": []
+          }
+        },
+        "credential": {
+          "state": "none",
+          "name": null,
+          "expires": null,
+          "detail": "不需要"
+        },
+        "notes": [
+          {
+            "code": "pointer_missing",
+            "state": "missing",
+            "text_zh": "指路规则未投递",
+            "fix": "到 Mac 上让 AI 处理",
+            "at": "mac"
+          }
+        ]
+      },
+      {
+        "env": null,
+        "name": "别人的机器",
+        "transport": null,
+        "mode": "others",
+        "phase": null,
+        "now_zh": null,
+        "deny": [],
+        "targets": [],
+        "gets": {
+          "public": {
+            "state": "gets",
+            "plugins": [
+              "demo-public"
+            ]
+          },
+          "personal": {
+            "state": "none",
+            "plugins": []
+          },
+          "company": {
+            "state": "none",
+            "plugins": []
+          },
+          "local": {
+            "state": "own",
+            "plugins": []
+          }
+        },
+        "notes": [],
+        "credential": {
+          "state": "none",
+          "name": null,
+          "expires": null,
+          "detail": "不需要"
+        }
+      }
+    ],
+    "publisher": {
+      "env": "mac",
+      "name": "Mac"
+    }
+  }
+}

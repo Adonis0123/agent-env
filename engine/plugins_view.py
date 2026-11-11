@@ -10,6 +10,12 @@ cache lacks or last answered over STALE_AFTER ago, within a few seconds; and `ma
 after a push) records that the repository is no longer empty. A repository that was never asked about, or
 whose host could not be reached, is `unknown` and carries how to fix it.
 
+Building and publishing may belong to one machine only (the manifest's `publish_from`). On every other machine
+(plugins.published_away) a build that is not there and a push that was never recorded are not problems: the
+plugin's states turn neutral (`elsewhere`, `not_needed`) with no command, the plugin repositories lose their
+not-built and not-pushed notes, and the view names the publishing machine in `publisher`. What the host said
+about a repository (public or private, empty) shows the same on every machine.
+
 Only repositories of the plugin system are looked at: the ones [sources] point into, this repository, and the
 plugin repositories ([plugins.<name>].repo, or [plugin_repos].<visibility> while no plugin of that visibility
 records one). The dozens of work repositories in repos.json are left alone.
@@ -400,20 +406,28 @@ def show(manifest: dict, manifest_path, out, repos_file=None) -> int:
 
 # ── plugins: built? pushed? ───────────────────────────────────────────────
 
-def _note(code: str, state: str, text: str, fix: str = "") -> dict:
-    return {"code": code, "state": state, "text_zh": text, "fix": fix}
+def _note(code: str, state: str, text: str, fix: str = "", at=None) -> dict:
+    """`at`: the environment the fix is done on when that is not this machine; the fix is then words that
+    name the machine, never a command to run here."""
+    note = {"code": code, "state": state, "text_zh": text, "fix": fix}
+    return dict(note, at=at) if at else note
 
 
-def plugin_state(manifest: dict, name: str, rules_text, ledger: dict) -> dict:
+def plugin_state(manifest: dict, name: str, rules_text, ledger: dict, away=None) -> dict:
+    """`away`: plugins.published_away, when another machine builds and publishes."""
     spec = plugins.table(manifest).get(name)
     spec = spec if isinstance(spec, dict) else {}
     vis = plugins.visibility(spec)
     try:
-        c = plugin_check.plugin_cell(manifest, name, rules_text)
+        c, built = plugin_check.judge(manifest, name, rules_text)
         build = {"state": c["state"], "detail": c.get("detail", ""), "fix": c.get("fix", "")}
     except Exception as exc:  # a half-written manifest or source: the tab still shows, this plugin is unknown
+        built = None
         build = {"state": "unknown", "detail": f"生成状态查不了（{type(exc).__name__}: {exc}）",
                  "fix": "bin/agent-env check"}
+    if away and built in ("missing", "stale"):  # not this machine's to build: nothing is missing here
+        build = {"state": "not_needed" if vis == plugins.LOCAL else "elsewhere",
+                 "detail": plugin_check.away_detail(manifest, name, away), "fix": ""}
     rec = ledger.get("plugins", {}).get(name) if isinstance(ledger.get("plugins"), dict) else None
     steps = rec.get("steps") if isinstance(rec, dict) and isinstance(rec.get("steps"), dict) else {}
     steps = {s: steps[s] for s in plugins.LEDGER_STEPS if isinstance(steps.get(s), str)}
@@ -435,14 +449,18 @@ def plugin_state(manifest: dict, name: str, rules_text, ledger: dict) -> dict:
         done = "、".join(STEP_ZH[s] for s in steps)
         left = "、".join(STEP_ZH[s] for s in plugins.LEDGER_STEPS if s not in steps)
         publish = {"state": "not_pushed", "detail": f"已完成：{done}；还没做：{left}" if done else "还没开始发布", "fix": again}
+    if away and publish["state"] in ("stale", "not_pushed"):  # the publish records are on the other machine
+        publish = {"state": "elsewhere", "detail": f"由 {away['name']} 推送，这台机器不推送", "fix": ""}
     repo = spec.get("repo") if isinstance(spec.get("repo"), str) and spec.get("repo") else None
     return {"name": name, "visibility": vis, "visibility_zh": plugins.label(vis),
             "description": _str(spec.get("description")), "repo": repo, "repo_key": repo_key(repo),
             "build": build, "publish": dict(publish, pushed_at=pushed_at, steps=steps)}
 
 
-def _repo_notes(card: dict, states: dict, info) -> list:
-    """What is still open for one plugin repository, worst first."""
+def _repo_notes(card: dict, states: dict, info, away=None) -> list:
+    """What is still open for one plugin repository, worst first. With `away` (another machine builds and
+    publishes) nothing about builds and pushes is open here; an empty repository still shows, and says where
+    to publish."""
     notes = []
     vis, zh = card["visibility"], card["visibility_zh"]
     mine = [states[n] for n in card["plugins"] if n in states]
@@ -452,15 +470,16 @@ def _repo_notes(card: dict, states: dict, info) -> list:
         notes.append(_note("no_plugin", "drift", "插件未定义", f"在清单加一个 visibility = \"{vis}\" 的 [plugins.<名字>]"))
     if not card["repo"]:
         notes.append(_note("no_repo", "drift", "仓库地址未填", "在清单这个插件里写 repo = \"<仓库地址>\""))
-    if any(p["build"]["state"] == "missing" for p in mine):
+    if not away and any(p["build"]["state"] == "missing" for p in mine):
         notes.append(_note("not_built", "missing", "未生成", "bin/agent-env plugin build --all"))
-    if any(p["build"]["state"] == "drift" for p in mine):
+    if not away and any(p["build"]["state"] == "drift" for p in mine):
         notes.append(_note("stale_build", "drift", "生成结果过期", "bin/agent-env plugin build --all"))
     if info and info["empty"]:
-        notes.append(_note("empty_repo", "drift", "空仓"))
-    if any(p["publish"]["state"] == "stale" for p in mine):
+        notes.append(_note("empty_repo", "drift", "空仓", f"到 {away['name']} 上让 AI 发布", away["env"]) if away
+                     else _note("empty_repo", "drift", "空仓"))
+    if not away and any(p["publish"]["state"] == "stale" for p in mine):
         notes.append(_note("stale_push", "drift", "仓库里是旧版", "bin/agent-env plugin publish --all"))
-    if any(p["publish"]["state"] == "not_pushed" for p in mine):
+    if not away and any(p["publish"]["state"] == "not_pushed" for p in mine):
         notes.append(_note("not_pushed", "drift", "未推送", "bin/agent-env plugin publish --all"))
     if info and info["visibility"] == PRIVATE and vis == PUBLIC:
         notes.append(_note("repo_private", "drift", "仓库还是私有，别人拿不到公开插件", "把仓库改成公开，或换一个公开仓"))
@@ -472,6 +491,14 @@ def _repo_notes(card: dict, states: dict, info) -> list:
 def _names(manifest: dict, key: str) -> dict:
     t = manifest.get(key)
     return t if isinstance(t, dict) else {}
+
+
+def _sent_away(note, away):
+    """On a machine that does not build or publish (`away`), a note whose fix starts there (the pointer rule of
+    a bot, a remote host that pulls) says which machine to go to and carries no command."""
+    if not note or not away:
+        return note
+    return _note(note["code"], note["state"], note["text_zh"], f"到 {away['name']} 上让 AI 处理", away["env"])
 
 
 def _pointer_note(statuses, env: str):
@@ -555,9 +582,9 @@ def _credential(manifest: dict, transport: str, attached: list) -> tuple:
     return worst, notes
 
 
-def environments(manifest: dict, statuses, table=None) -> list:
+def environments(manifest: dict, statuses, table=None, away=None) -> list:
     """One row per declared environment, in the manifest's order, then one for a machine that is not the
-    user's at all (it can only ever read what is public)."""
+    user's at all (it can only ever read what is public). `away`: plugins.published_away."""
     table = plugins.table(manifest) if table is None else table
     envs = manifest.get("environments") if isinstance(manifest.get("environments"), dict) else {}
     hosts, env_names = _names(manifest, "host_names"), _names(manifest, "env_names")
@@ -599,8 +626,9 @@ def environments(manifest: dict, statuses, table=None) -> list:
         else:
             row["credential"], more = _credential(manifest, transport, attached)
             notes += more
-            pointer = _pointer_note(statuses, env) if transport == plugins.CLOUD_HOSTED else \
-                _pull_note(statuses, env) if transport == plugins.REMOTE_EXEC else _compose_note(statuses, env)
+            pointer = _sent_away(_pointer_note(statuses, env), away) if transport == plugins.CLOUD_HOSTED else \
+                _sent_away(_pull_note(statuses, env), away) if transport == plugins.REMOTE_EXEC else \
+                _compose_note(statuses, env)
             if pointer:
                 notes.append(pointer)
         row["notes"] = notes
@@ -617,27 +645,31 @@ def environments(manifest: dict, statuses, table=None) -> list:
 
 # ── the field ─────────────────────────────────────────────────────────────
 
-def _view(manifest: dict, manifest_path, statuses, rules_text, repos_file=None) -> dict:
+def _view(manifest: dict, manifest_path, statuses, rules_text, repos_file=None, env=None) -> dict:
     lay = layout(manifest, manifest_path, repos_file)
     cache = read_cache()
     repos = {k: repo_info(k, cache) for k in lay["keys"]}
     ledger = plugins.read_ledger()
     table = plugins.table(manifest)
-    states = {n: plugin_state(manifest, n, rules_text, ledger) for n in table}
+    away = plugins.published_away(manifest, env)
+    states = {n: plugin_state(manifest, n, rules_text, ledger, away) for n in table}
     for card in lay["plugin_repos"]:
-        card["notes"] = _repo_notes(card, states, repos.get(card["repo"]))
+        card["notes"] = _repo_notes(card, states, repos.get(card["repo"]), away)
     stamps = sorted(r["checked_at"] for r in repos.values() if r["checked_at"])
-    return {"refresh_command": REFRESH_COMMAND, "checked_at": stamps[-1] if stamps else None,
-            "repos": list(repos.values()), "sources": lay["sources"], "generator": lay["generator"],
-            "plugin_repos": lay["plugin_repos"], "plugins": list(states.values()),
-            "environments": environments(manifest, statuses, table)}
+    out = {"refresh_command": REFRESH_COMMAND, "checked_at": stamps[-1] if stamps else None,
+           "repos": list(repos.values()), "sources": lay["sources"], "generator": lay["generator"],
+           "plugin_repos": lay["plugin_repos"], "plugins": list(states.values()),
+           "environments": environments(manifest, statuses, table, away)}
+    return dict(out, publisher=away) if away else out
 
 
-def view(manifest: dict, manifest_path, statuses, rules_text, repos_file=None) -> dict:
+def view(manifest: dict, manifest_path, statuses, rules_text, repos_file=None, env=None) -> dict:
     """The `plugins_view` field of `status --json --all`. It reads only the manifest and local files, and a
-    failure in here never fails the status: the field then carries `error` and the tab shows it."""
+    failure in here never fails the status: the field then carries `error` and the tab shows it. `env` is the
+    environment the status was taken as (--env, or the one this machine matches): it tells whether this
+    machine is the one that builds and publishes (plugins.published_away)."""
     try:
-        return _view(manifest, manifest_path, statuses, rules_text, repos_file)
+        return _view(manifest, manifest_path, statuses, rules_text, repos_file, env)
     except Exception as exc:
         return {"refresh_command": REFRESH_COMMAND,
                 "error": {"message": f"插件视图算不出来（{type(exc).__name__}: {exc}）",

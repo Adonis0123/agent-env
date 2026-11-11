@@ -306,6 +306,40 @@ class DoctorTests(PullBase):
         self.assertEqual(cells["AGENTS.md"]["state"], "drift")
         self.assertIn("plugin publish", cells["AGENTS.md"]["fix"])
 
+    def test_on_a_machine_that_does_not_publish_the_fix_names_the_one_that_does(self):
+        """`publish_from` names another machine: this one keeps no clone of the plugin repositories, so it only
+        says the pulled rules differ from the sources, and where publishing is done."""
+        self.deliver()
+        (self.root / "AGENTS.md").write_text(self.rules().replace("shared body", "shared body, unpublished"), encoding="utf-8")
+        plain = self.by_name()["AGENTS.md"]
+        self.assertIn("源改了还没发布", plain["detail"])
+        self.manifest.write_text('publish_from = "desk"\n' + self.manifest.read_text(encoding="utf-8")
+                                 + '[environments.desk]\nplatform = "nomatch"\n[env_names]\ndesk = "Desk"\n', encoding="utf-8")
+        m = habits.load_manifest(self.manifest)
+        self.assertFalse((plugins.clone_dir("pub") / ".git").exists(), "no publish clone on this machine")
+        status = agent_env.doctor(self.manifest, "box", self.repo)  # this machine is not `desk`
+        cell = {c["name"]: c for c in next(t for t in status["targets"] if t["id"] == TID)["habits"]}["AGENTS.md"]
+        self.assertEqual(cell["state"], "drift")
+        self.assertIn("与规则源现在生成的内容不一致", cell["detail"])
+        self.assertNotIn("还没发布", cell["detail"])
+        self.assertEqual(cell["fix"], "到 Desk 上让 AI 发布（发布只在那台机器上做）；远程下次拉取时更新")
+        away = plugins.published_away(m, "box")
+        self.assertEqual(away, {"env": "desk", "name": "Desk"})
+        todo = next(i for i in issues.build([status], [], m, away=away) if i["target"] == TID and i["ref"]["name"] == "AGENTS.md")
+        self.assertEqual((todo["actor"], todo["ai_task"], todo["at"]), ("other_env", None, away))
+        self.assertEqual([(x["who"], x["command"]) for x in todo["steps"]], [("other_env", None)])
+        self.assertNotIn("bin/agent-env", json.dumps(todo, ensure_ascii=False))
+        row = next(r for r in plugins_view.view(m, self.manifest, [status], self.rules(), env="box")["environments"]
+                   if r["env"] == "box")
+        self.assertEqual(row["notes"], [{"code": "pull_drift", "state": "drift", "text_zh": "拉到的规则不是最新",
+                                         "fix": "到 Desk 上让 AI 处理", "at": "desk"}])
+        # on the publishing machine the cell is what it was without the key
+        mine = agent_env.doctor(self.manifest, "box", self.repo, "desk")
+        cell = {c["name"]: c for c in next(t for t in mine["targets"] if t["id"] == TID)["habits"]}["AGENTS.md"]
+        self.assertEqual(cell, plain)
+        self.assertIn("plugin publish", cell["fix"])
+        self.assertFalse(any("at" in i for i in issues.build([mine], [], m, away=plugins.published_away(m, "desk"))))
+
     def test_failed_pull_and_stopped_timer_are_drift(self):
         self.deliver()
         (self.remotes / "co").rename(self.remotes / "co-gone")

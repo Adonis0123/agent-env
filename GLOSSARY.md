@@ -18,7 +18,8 @@ Hermes, a cloud chat bot.
 _Avoid_: client, tool
 
 **Source environment** (源环境): the machine where the rules source is edited and plugins are built and
-published. Cloud-hosted environments name it in `driven_from`.
+published. Cloud-hosted environments name it in `driven_from`; the manifest's top-level `publish_from` names it
+as the one machine that builds and publishes, and every other machine then only uses the plugins.
 
 **Remote-exec environment** (远程云主机，本机投递): a server this machine reaches only through a command prefix
 (`exec`, for example an ssh wrapper). Checked and set up from here with `--env <name>`.

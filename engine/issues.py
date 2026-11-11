@@ -10,6 +10,7 @@ import os
 import re
 from datetime import datetime, timezone
 
+import plugins
 from cells import habit_of
 from expect import portal
 
@@ -364,11 +365,33 @@ def step(who, text_zh, command=None, confirm=False) -> dict:
     return {"who": who, "text_zh": spaced(text_zh), "command": command, "confirm": confirm}
 
 
+def publishers_job(source, cell, pending) -> bool:
+    """True when fixing this habit cell starts with building or publishing plugins: a host that pulls
+    (publish, then install), a plugin target's pointer rule (build, then the pointer), and a plugin's built
+    directory that is missing or old. A plugin whose manifest entry or sources are wrong is not: its cell
+    carries that fix, and it is the same on every machine.
+    `source` alone does not decide. A report from an older engine has no `expect_kind`, so its source is a
+    guess (_guess_source: a plugin cell comes out as "other"); the cell's own fix naming one of the publishing
+    machine's commands (plugins.needs_publisher) is the same answer whatever the source was taken for."""
+    if source == "pulled" or (source == "delivered" and pending is not None):
+        return True
+    return plugins.needs_publisher(cell.get("fix"))
+
+
+def away_steps(away: dict) -> list:
+    """The one step of a thing to do that belongs to the machine that builds and publishes the plugins
+    (plugins.published_away): where to go. No command: nothing of it runs on this machine."""
+    name = away["name"]
+    return [step("other_env", f"到 {name} 上让 AI 处理：在那台电脑的环境面板里打开这条待办，按那里的步骤做。"
+                              f"生成和发布插件只在 {name} 上做，这台电脑不做")]
+
+
 def _habit_steps(source, tid, who, cell, remote=False, pending=None, recheck="bin/agent-env doctor",
-                 sync=None) -> list:
+                 sync=None, away=None) -> list:
     """`pending`: None for a target without plugins, else the plugins of its pointer rule that have no
     repository yet. `recheck`: the doctor command for the target's environment. `sync`: the environment's
-    sync_command, when its own sync writes composed files."""
+    sync_command, when its own sync writes composed files. `away`: another machine builds and publishes the
+    plugins; a step that would build here is then never offered."""
     fix = str(cell.get("fix", ""))
     if source == "delivered" and pending is not None:  # a plugin target stores only its pointer rule
         # AI does everything but the paste; a plugin without a repository is a precondition it stops at
@@ -396,7 +419,7 @@ def _habit_steps(source, tid, who, cell, remote=False, pending=None, recheck="bi
                 step("user", f"看过演练后确认；确认后由 AI 运行 bin/agent-env deliver --target {tid} --yes"
                      "（改远程文件，预览和本机一致才打开定时器）", None, True),
                 step("ai", "重新体检确认", recheck)]
-    if source == "plugins":
+    if source == "plugins" and not away:
         return [step("ai", "按源重新生成插件目录（只写本机，不提交不推送）", _cmd(fix) or "bin/agent-env plugin build --all"),
                 step("ai", "重新体检确认", recheck)]
     if source == "delivered":
@@ -470,12 +493,15 @@ def _pointer_pending(manifest: dict, tid: str):
             and table[n].get("visibility") in ("public", "personal", "company") and not table[n].get("repo")]
 
 
-def _issue(id_, env, target, category, state, source, names, steps, ref) -> dict:
+def _issue(id_, env, target, category, state, source, names, steps, ref, at=None) -> dict:
+    """`at`: the machine that builds and publishes the plugins, when the issue is its job and this machine is
+    not it. The issue then belongs to that machine (actor other_env, no AI task) and says which one."""
     actor, task = actor_of(category, source)
     title, impact = _template(category, state, source)
-    return {"id": id_, "env": env, "target": target, "category": category, "state": state, "actor": actor,
+    issue = {"id": id_, "env": env, "target": target, "category": category, "state": state, "actor": actor,
              "title_zh": spaced(title.format(**names)), "impact_zh": spaced(impact.format(**names)), "steps": steps,
              "ai_task": task, "ref": ref}
+    return dict(issue, actor="other_env", ai_task=None, at=dict(at)) if at else issue
 
 
 def _names(**kw) -> dict:
@@ -537,8 +563,10 @@ def _env_problem(manifest, env, message, fix, category, extra=None):
     return _issue(f"{env or '-'}:{category}:{env or '-'}", env, None, category, state, source, names, steps, ref)
 
 
-def env_issues(status: dict, manifest: dict, now=None) -> list:
-    """Issues of one environment status (unsorted)."""
+def env_issues(status: dict, manifest: dict, now=None, away=None) -> list:
+    """Issues of one environment status (unsorted). `away`: plugins.published_away, when this machine is not
+    the one that builds and publishes the plugins. What starts with a build or a publish (publishers_job) is
+    then that machine's to do, whichever environment's status the cell came from."""
     env = status.get("env", "")
     out = []
     err = status.get("error")
@@ -563,10 +591,14 @@ def env_issues(status: dict, manifest: dict, now=None) -> list:
             names = _names(who=who, what=what, kind=KIND_ZH.get(c.get("kind"), ""))
             ref = {"kind": c.get("kind"), "name": raw, "case": None, "detail": c.get("detail", "")}
             tenv = t.get("env", "") or env
+            pending = _pointer_pending(manifest, tid)
+            if away and publishers_job(source, c, pending):
+                out.append(_issue(f"{tid}:{c.get('kind')}:{raw}", env, tid, "habit", c["state"], source, names,
+                                  away_steps(away), ref, at=away))
+                continue
             out.append(_issue(f"{tid}:{c.get('kind')}:{raw}", env, tid, "habit", c["state"], source, names,
-                              _habit_steps(source, tid, who, c, is_remote(manifest, tenv),
-                                           _pointer_pending(manifest, tid), doctor_cmd(manifest, tenv),
-                                           _sync_command(manifest, tenv)), ref))
+                              _habit_steps(source, tid, who, c, is_remote(manifest, tenv), pending,
+                                           doctor_cmd(manifest, tenv), _sync_command(manifest, tenv), away), ref))
         hv = t.get("host_version")
         if isinstance(hv, dict) and hv.get("changed"):
             names = _names(who=who, current=hv.get("current") or "?", recorded=hv.get("recorded") or "?")
@@ -608,12 +640,13 @@ def sort_issues(issues: list) -> list:
     return out
 
 
-def build(environments: list, errors: list, manifest: dict, now=None) -> list:
-    """All issues: per-environment ones, plus errors of environments that have no status."""
+def build(environments: list, errors: list, manifest: dict, now=None, away=None) -> list:
+    """All issues: per-environment ones, plus errors of environments that have no status. `away`: the machine
+    that builds and publishes the plugins when it is not this one (see env_issues)."""
     have = {e.get("env") for e in environments}
     out = []
     for e in environments:
-        out += env_issues(e, manifest, now)
+        out += env_issues(e, manifest, now, away)
     for err in errors:
         if err.get("env") not in have or not err.get("env"):
             out.append(_env_problem(manifest, err.get("env", ""), str(err.get("message", "")),

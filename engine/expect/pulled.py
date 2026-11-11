@@ -6,6 +6,11 @@ Cells (habit rules):
   <name, default the output's file name>  the joined rules vs `pull.joined_rules` (synced, or drift with why:
                                           not pulled yet, or the sources changed after the last publish)
   定时拉取                                 timer active, last run ok and recent, kit and pull.conf current
+
+Whether the plugins were published is read from this machine's working clones of the plugin repositories.
+A machine that does not publish (the manifest's `publish_from` names another one, plugins.published_away)
+keeps no such clone: there the rules cell only says that what was pulled differs from the sources, and that
+publishing is done on that machine; it never offers `plugin publish` here.
 """
 import subprocess
 from datetime import datetime, timezone
@@ -103,6 +108,10 @@ def _rules_cell(manifest, spec, target, exp, kv, rules_text) -> dict:
         return cell(kind, name, SYNCED, f"{where} 与插件 {plist} 按顺序拼接的结果一致，哈希 {got[:12]}")
     if kv.get("status.result") is None:
         return cell(kind, name, DRIFT, f"{where} 还是本机投递的旧规则（{got[:12]}），远程还没拉取过插件", _deliver_fix(tid))
+    away = source.published_away(manifest, target.get("env"))
+    if away:  # this machine keeps no clone of the plugin repositories: it cannot tell pushed from not pushed
+        return cell(kind, name, DRIFT, f"{where}（{got[:12]}）与规则源现在生成的内容不一致（{want[:12]}）",
+                    f"到 {away['name']} 上让 AI 发布（发布只在那台机器上做）；远程下次拉取时更新")
     behind = [n for n in pull.names(manifest, target)
               if _published_rev(n) and kv.get(f"status.plugin.{n}") != _published_rev(n)]
     if behind:

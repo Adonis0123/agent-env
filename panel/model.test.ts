@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { test } from "node:test";
-import { ACTORS, aiTaskFor, habitFix, primaryAction, rowActions, guardWrites, batchPayload, batchTodos, outdatedTodos, glossaryOf, gloss, inboxGroups, machineCards, matrixGroups, readTab, tabCounts, type Todo, todoActions, todoList, todoPayload, views, writeTab } from "./model.ts";
+import { ACTORS, aiTaskFor, cellTodos, habitFix, primaryAction, rowActions, guardWrites, batchPayload, batchTodos, outdatedTodos, glossaryOf, gloss, inboxGroups, machineCards, matrixGroups, readTab, tabCounts, type Todo, todoActions, todoList, todoPayload, views, writeTab } from "./model.ts";
 import { ageDays, agentGroups, agentRows, type AllStatus, dotsScore, evalRows, evalSummary, freshness, type HabitCell, isStale, kindDots, kindSummary, neverReported, overview, parseAllStatus, StatusShapeError, versionSummary } from "./model.ts";
 
 const NOW = Date.parse("2026-11-09T08:00:00Z");
@@ -313,6 +313,34 @@ test("v6 rows: one main button picked by who handles it; the rest behind \"more\
   assert.equal(primaryAction({ ...base, steps: [] }), "ai", "needs you, with or without steps: the AI button leads");
   const away = todos.find((t) => t.actor === "other_env")!;
   assert.equal(primaryAction({ ...away, steps: away.steps.map((s) => ({ ...s, command: null })) }), "ai", "another machine with no command: the AI prepares it");
+});
+
+test("a thing to do that is the publishing machine's job (v9-publish-from): no button, no command, the machine named", () => {
+  // the demo manifest (publish_from = "mac") as its WSL machine sees it: the laptop has not built its plugins yet
+  const todos = todoList(fixture("v9-publish-from"));
+  assert.equal(todos.length, 5);
+  for (const t of todos) {
+    assert.deepEqual([t.actor, t.ai_task, t.at], ["other_env", null, { env: "mac", name: "Mac" }], t.id);
+    assert.equal(primaryAction(t), "none", t.id);
+    const a = rowActions(t);
+    assert.deepEqual([a.primary, a.commands, a.aiInMore, a.copyInMore], ["none", [], false, false], t.id);
+    assert.deepEqual(t.steps.map((s) => [s.who, s.command, s.confirm]), [["other_env", null, false]], t.id);
+  }
+  assert.deepEqual(inboxGroups(todos).map((g) => [g.actor, g.items.length]), [["other_env", 5]]);
+  assert.deepEqual(batchTodos(todos), [], "nothing of it goes to this machine's AI");
+  for (const t of todos) assert.deepEqual(cellTodos(todos, t.env, t.target, "rules"), [], "no AI button behind the cell either");
+  // a command that slipped into such a step is still not handed out here
+  const odd = { ...todos[0], steps: [{ ...todos[0].steps[0], command: "bin/agent-env plugin build --all" }] };
+  assert.deepEqual(rowActions(odd).commands, []);
+  // without `at` nothing changes: no other fixture's thing to do has one, and odd values are dropped
+  for (const name of ["v5-issues", "v8-ai-fix", "v8-plugins"]) for (const t of todoList(fixture(name))) assert.equal(t.at, undefined, `${name} ${t.id}`);
+  const raw = JSON.parse(readFileSync(join(import.meta.dirname, "fixtures", "v9-publish-from.json"), "utf8"));
+  raw.issues[0].at = "mac";
+  raw.issues[1].at = { name: "Mac" };
+  raw.issues[2].at = { env: "mac" };
+  const read = todoList(parseAllStatus(raw));
+  assert.deepEqual(read.slice(0, 3).map((t) => t.at), [undefined, undefined, { env: "mac", name: "mac" }]);
+  assert.equal(primaryAction(read[0]), "ai", "a row on another machine without a command falls back to the AI button, as before");
 });
 
 test("AI first (v8-ai-fix): host upgrades sit with what AI fixes; every row that needs you leads with its AI button", () => {

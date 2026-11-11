@@ -555,6 +555,42 @@ test("AI first: a host upgrade is AI's to fix; what needs you leads with the AI 
   assert.equal([...plainInbox.matchAll(/<div class="todo-acts"><button type="button" class="lt-btn lt-btn-sm" data-copy-from="fact-\d+"[^>]*>复制给 AI</g)].length, 5);
 });
 
+test("publish_from: what the publishing machine has to do shows on another machine with where to go, and nothing to copy or run", async () => {
+  // v9-publish-from: the demo manifest (publish_from = "mac") as its WSL machine sees it, before the laptop built anything
+  for (const ask of [undefined, { bridge: "postMessage" as const }]) {
+    const { fragment } = await serve({ statusFile: FIX("v9-publish-from"), lang: "zh", ...(ask ? { ask } : {}) });
+    const html = await fragment();
+    const part = (id: string, next: string) => html.slice(html.indexOf(`id="panel-${id}"`), html.indexOf(`id="panel-${next}"`));
+    const inbox = part("inbox", "machines");
+    assert.deepEqual([...inbox.matchAll(/<h2 class="group-h">([^<]+)<span class="num"> · (\d+)<\/span>/g)].map((m) => `${m[1]} ${m[2]}`), ["去另一台机器 5"]);
+    // [title, what stands in the place of the main button, who the step is for]
+    const rows = [...inbox.matchAll(/<article class="todo" data-todo="[^"]+" data-actor="other_env">.*?<h3 class="todo-title">(.*?)<\/h3>.*?<div class="todo-acts">(<span class="todo-at">[^<]*<\/span>)<button type="button" class="lt-btn lt-btn-sm lt-btn-icon"[^>]*data-toggle="[^"]*" aria-label="更多：具体步骤" data-tip="更多：具体步骤">.*?<span class="step-who">(.*?)<\/span><span>(.*?)<\/span>/gs)].map((m) => m.slice(1, 5));
+    const step = "到 Mac 上让 AI 处理：在那台电脑的环境面板里打开这条待办，按那里的步骤做。生成和发布插件只在 Mac 上做，这台电脑不做";
+    assert.deepEqual(rows, ["Grok Bot 的指路规则还没投递", "Grok Bot 要拉的规则还没生成", "Claude Code 要拉的规则还没生成", "Claude Code 要拉的规则还没生成", "Claude Code 要拉的规则还没生成"].map(
+      (title) => [title, '<span class="todo-at">到 Mac 上处理</span>', "你（在 Mac 上）", step]));
+    assert.doesNotMatch(html, /你（在 grok-bot 上）/, "the machine to go to is the one that publishes, not the bot the thing is about");
+    // the same five in every tab, and none of them with a command, a copy button or an AI button
+    for (const [id, next] of [["inbox", "machines"], ["machines", "matrix"], ["matrix", "relation"]]) {
+      const tab = part(id, next);
+      assert.equal(tab.match(/class="todo-at"/g)?.length, 5, id);
+      assert.doesNotMatch(tab, /data-copy=|data-ai-copy|data-ask=|data-ask-all|class="cmd"/, id);
+    }
+    // the relation tab's detail pane: the cell's own fix is a command for the laptop; it says where to go instead
+    const relation = part("relation", "plugins");
+    assert.match(relation, /<span class="rp-name">指路规则<\/span>.*?<p class="rp-why">没有投递记录[^<]*<\/p><p class="rp-fix">到 Mac 上处理<\/p><\/li>/s);
+    assert.doesNotMatch(relation, /data-ai-copy|data-ask=|class="cmd"/);
+    // on the whole page, in a sentence to copy or as shown code: the read-only check of the repositories is the only plugin command
+    assert.doesNotMatch(html, /plugin (?:build|publish|pointer)|<span class="tok">plugin<\/span> <span class="tok">(?!repos<)/);
+    assert.match(html, /<span class="tok">plugin<\/span> <span class="tok">repos<\/span> <span class="tok">--refresh<\/span>/);
+  }
+});
+
+test("publish_from: the publishing machine's own page keeps every button and command (v8-plugins has no publisher)", async () => {
+  const { fragment } = await serve({ statusFile: FIX("v8-plugins"), lang: "zh" });
+  const html = await fragment();
+  assert.doesNotMatch(html, /class="todo-at"|到 [^<"]* 上处理/);
+});
+
 test("one column for every view: no view widens the page, so the title, tabs, view bar and footer never move", async () => {
   const { CSS } = await import("./page.ts");
   assert.match(CSS, /^\s*\.wrap \{ max-width: 1240px; margin: 0 auto;/m);

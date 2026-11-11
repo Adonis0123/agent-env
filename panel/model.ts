@@ -423,6 +423,9 @@ export interface Todo {
   ref: { kind: string; name: string; case: string | null };
   /** "engine": from `issues`; "outdated": the report has no `issues`, so the panel asks for a new one */
   source?: "engine" | "outdated";
+  /** the machine that builds and publishes the plugins, when this thing to do is its job and the page's machine is
+   *  not it: the row then says where to go and has no button that copies anything to run here */
+  at?: { env: string; name: string };
 }
 
 export type GlossaryEntry = GlossaryWord;
@@ -460,6 +463,7 @@ function normalizeTodo(r: Record<string, unknown>): Todo {
   };
   if (r.title_en) out.title_en = str(r.title_en);
   if (r.impact_en) out.impact_en = str(r.impact_en);
+  if (isObj(r.at) && str(r.at.env)) out.at = { env: str(r.at.env), name: str(r.at.name) || str(r.at.env) };
   return out;
 }
 
@@ -833,8 +837,10 @@ export function todoActions(t: Todo): TodoActions {
 /** The one main button a row shows. "ai": hand it to AI, the main button of every row AI can start on from this
  *  machine: what AI fixes, what needs you (AI fixes or prepares it and stops at your step) and notices (AI reads the
  *  logs). "copy": copy the commands to run on the other machine, where this machine's AI cannot reach. The steps
- *  themselves are behind "more" in every row. A row on another machine with nothing to copy falls back to its AI button. */
-export type PrimaryAction = "ai" | "copy";
+ *  themselves are behind "more" in every row. A row on another machine with nothing to copy falls back to its AI button.
+ *  "none": the job of the machine that builds and publishes the plugins (Todo.at): nothing of it runs here, so the row
+ *  has no button, only the words that say where to go. */
+export type PrimaryAction = "ai" | "copy" | "none";
 
 export interface RowActions extends TodoActions {
   primary: PrimaryAction;
@@ -845,12 +851,14 @@ export interface RowActions extends TodoActions {
 }
 
 export function primaryAction(t: Todo): PrimaryAction {
+  if (t.at) return "none";
   return t.actor === "other_env" && todoActions(t).commands.length ? "copy" : "ai";
 }
 
 export function rowActions(t: Todo): RowActions {
   const a = todoActions(t);
   const primary = primaryAction(t);
+  if (primary === "none") return { ...a, commands: [], primary, aiInMore: false, copyInMore: false };
   return { ...a, primary, aiInMore: primary !== "ai", copyInMore: primary !== "copy" && a.commands.length > 0 };
 }
 

@@ -72,6 +72,16 @@
 - Grok：`config.toml` 的 `[skills] disabled = [...]`。
 - Hermes：`config.yaml` 的 `skills.disabled`，清单里用 `skills_disabled` + `skills_config` 让 doctor 核对。
 
+## 多台自己的机器：谁生成并发布插件
+
+插件的生成结果和发布记录只在一台机器的状态目录里。自己的机器不止一台时，在清单顶部写明由哪台负责：
+
+```toml
+publish_from = "mac"   # [environments] 里一台自己的机器（不写 transport 的环境）；不写这一行时每台机器各查各的
+```
+
+其他机器只使用插件（规则由本机从规则源合成）：面板「插件」页签只说一句「插件由 Mac 生成并发布」，不再显示「未生成」「未推送」，也不给生成、发布的命令；仓库是空的这类要发布才能解决的事，写的是「到 Mac 上让 AI 发布」。
+
 ## 云端托管落点
 
 厂商云端的落点（如 Grok Bot）也要一份机器档案 `profiles/<环境>/README.md`，写清它在哪里跑、怎么拿到插件、怎么授权、哪些还没核实；范例见 `profiles/grok-bot/README.md`。清单里它是单独一个环境：

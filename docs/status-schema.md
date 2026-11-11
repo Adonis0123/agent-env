@@ -136,6 +136,7 @@
 - 宿主升级（`host_version`）归 `ai` / `fix`：步骤是查发布说明、在那台机器实测、有变就停下报告、没变经用户确认后改 `host_version.recorded`（`confirm: true`，没有可复制的命令）。
 - 排序：`env_unreadable`、`env_stale`、`missing`、`drift`、`fail`、`host_version`、`eval_error`；同一落点同类合并（如抽测出错 ×2 合成一条，`ref.case` 为逗号分隔）。
 - `customized`、`synced`、`unknown` 不产生待办。
+- `at`（可选，`{ "env": "mac", "name": "Mac" }`）：清单写了 `publish_from`、算出这份列表的机器不是那台发布机、而这件事要靠生成或发布插件解决时才有（`pulled` 格与规则源不一致、`delivered` 指路规则没投递或过期、格自己的修法里写着 `plugin build`、`plugin publish` 或 `plugin pointer`；发布机自己上报的这类格也算）。按修法判断不依赖 `expect_kind`：旧版引擎上报的格没有这个字段，同样分到发布机。这时 `actor` 是 `other_env`、`ai_task` 是 `null`，`steps` 只有一步「到 Mac 上让 AI 处理…」，`command` 为 `null`。面板在按钮的位置显示「到 Mac 上处理」，不给命令、「复制给 AI」和 AI 按钮；关系图详情里这一格的修法也换成这句话。清单本身写错的 `plugins` 格（修法不是生成或发布）不带 `at`，修法照原样给。没写 `publish_from` 或在发布机上，没有任何待办带 `at`。
 - 计数口径：待办总数 = `len(issues)`；按机器卡片的「要处理」= 该 env 的 issues 数；总览「只看有问题」= 有 issue 的落点数（另显示 issues 总数）。
 
 ### 抽测用例中文名
@@ -182,13 +183,14 @@
   "plugin_repos": [ { "visibility": "public", "visibility_zh": "公开", "repo": "github.com/...", "plugins": ["demo-public"],
                       "notes": [ { "code": "not_pushed", "state": "drift", "text_zh": "未推送", "fix": "bin/agent-env plugin publish --all" } ] } ],
   "plugins": [ { "name": "demo-public", "visibility": "public", "visibility_zh": "公开", "description": "...", "repo": "https://...", "repo_key": "github.com/...",
-                 "build": { "state": "synced | drift | missing | unknown", "detail": "...", "fix": "" },
-                 "publish": { "state": "pushed | stale | not_pushed | local", "detail": "...", "fix": "...", "pushed_at": null, "steps": { "build": "..." } } } ],
+                 "build": { "state": "synced | drift | missing | unknown | elsewhere | not_needed", "detail": "...", "fix": "" },
+                 "publish": { "state": "pushed | stale | not_pushed | local | elsewhere", "detail": "...", "fix": "...", "pushed_at": null, "steps": { "build": "..." } } } ],
   "environments": [ { "env": "grok-bot", "name": "Grok Bot", "transport": "local | remote-exec | cloud-hosted", "mode": "plugins | legacy | others",
                       "phase": null, "now_zh": null, "deny": ["company"], "targets": [ { "id": "grok-bot/bot", "name": "Grok Bot", "plugins": ["demo-public"] } ],
                       "gets": { "public": { "state": "gets | none | denied | legacy | own", "plugins": ["demo-public"] }, "personal": {}, "company": {}, "local": {} },
                       "credential": { "state": "own | none | token | expiring | expired | missing | unknown | legacy", "name": null, "expires": null, "detail": "..." },
-                      "notes": [ { "code": "pointer_missing | pull_missing | pull_drift", "state": "missing", "text_zh": "指路规则未投递", "fix": "..." } ] } ]
+                      "notes": [ { "code": "pointer_missing | pull_missing | pull_drift", "state": "missing", "text_zh": "指路规则未投递", "fix": "..." } ] } ],
+  "publisher": { "env": "mac", "name": "Mac" }
 }
 ```
 
@@ -197,4 +199,6 @@
 - `environments` 按清单 `[environments]` 的顺序，最后多一行 `env: null`、`mode: "others"`：别人的机器，只能拿到公开插件。`mode: "legacy"` 是还没改成插件的环境，`phase` 是 `docs/plugins-design.md`「迁移阶段」里把它改过来的阶段，四列都是 `legacy`。
 - 远程云主机（`remote-exec`）改成插件后自己定时拉取：`credential.state` 是 `own`（用那台机器已有的 git 凭证）；它的 `pulled` 格不是已同步时多一条 `pull_missing` 或 `pull_drift` 的 note。
 - `notes[].state` 取 `fail | missing | drift | planned`；`fail`（如公开仓里放了非公开插件、挂了禁止的可见性）和 `missing`、`drift` 面板标色，`planned` 不标色。
+- 清单顶层写了 `publish_from = "<环境>"`（负责生成并发布插件的那台机器）、而算出这份状态的机器不是它时，多一个 `publisher`（那台机器的环境名和显示名）；发布机上和没写 `publish_from` 时没有这个键，其余内容和以前一样。有 `publisher` 时：本机没有或过期的生成结果不算缺失，`build.state` 是 `elsewhere`（本机插件是 `not_needed`：合成规则直接读规则源）；本机没有或过期的发布记录不算未推送，`publish.state` 是 `elsewhere`；这些状态的 `fix` 都是空的。`plugin_repos[].notes` 不再有 `not_built`、`stale_build`、`stale_push`、`not_pushed`；从仓库问到的事实照常显示，`empty_repo` 的 `fix` 是一句话（「到 Mac 上让 AI 发布」），并多一个 `at`（要去处理的环境名）。`environments[].notes` 里的 `pointer_missing`、`pointer_drift`、`pull_missing`、`pull_drift` 也一样：`fix` 换成「到 Mac 上让 AI 处理」并带 `at`。带 `at` 的 note 面板只显示文字，不给命令和「复制给 AI」按钮。本机是哪个环境：这次状态是按自己的机器（不写 transport 的环境，含 `--env` 指定）取的就是它，否则按 `platform` / `wsl` 匹配；`status --all` 连带检查云端托管环境时沿用同一个判断，不会因为清单里有两台同平台的机器而认错。
+- 同样的情况下，期望 `kind = "plugins"` 的习惯格对本机没有或过期的生成结果报 `unknown`（`fix` 为空），不报 `missing` / `drift`，所以不产生待办。`pulled` 格发现远程拉到的规则和规则源现在生成的不一样时仍报 `drift`，但不看本机有没有发布用的克隆，`fix` 是「到 Mac 上让 AI 发布（发布只在那台机器上做）；远程下次拉取时更新」。
 - `view` 自己出错时整个字段是 `{ "refresh_command": "...", "error": { "message": "...", "fix": "..." } }`，`status` 照常返回，面板在标签里显示这条错误。
