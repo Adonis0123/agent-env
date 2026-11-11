@@ -16,6 +16,8 @@
 
 <p align="center"><a href="README.md">English</a> | 中文</p>
 
+https://github.com/user-attachments/assets/8e01810b-c097-4acf-9569-0fa1f11717c8
+
 <img alt="笔记本、WSL、服务器 bot 和云端 bot 各抄一份规则，越改越不一样；agent-env 把规则放进一份清单，打包成插件，分三种方式送达，再用 doctor 逐个体检" src="docs/assets/demo.gif" width="1280">
 
 ## 怎么运作

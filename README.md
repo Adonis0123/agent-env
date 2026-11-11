@@ -16,6 +16,8 @@
 
 <p align="center">English | <a href="README.zh-CN.md">中文</a></p>
 
+https://github.com/user-attachments/assets/8e01810b-c097-4acf-9569-0fa1f11717c8
+
 <img alt="Rules copied by hand drift apart across a laptop, WSL, a server bot and a cloud bot; agent-env keeps them in one manifest, ships them as plugins, delivers them three ways and checks every target with doctor" src="docs/assets/demo.gif" width="1280">
 
 ## How it works
