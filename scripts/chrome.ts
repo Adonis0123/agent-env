@@ -9,8 +9,16 @@ import { homedir, hostname, tmpdir, userInfo } from 'node:os'
 import { join, resolve } from 'node:path'
 
 export const root = resolve(import.meta.dirname, '..')
-/** The fixture the README panel shots show: every plugin, a remote target and a cloud bot. */
-export const PANEL_FIXTURE = 'panel/fixtures/v8-plugins.json'
+/**
+ * What the README panel shots show, per language. The engine writes its to-do titles in Chinese, so the English shot
+ * uses a fixture whose page is all English (drift.json, on its Overview tab); the Chinese one shows every plugin, a
+ * remote target and a cloud bot (v8-plugins.json, on its To do tab).
+ */
+export const PANEL_SHOTS = {
+  en: { fixture: 'panel/fixtures/drift.json', tab: 'matrix' },
+  zh: { fixture: 'panel/fixtures/v8-plugins.json', tab: 'inbox' },
+} as const
+const PANEL_FIXTURE = PANEL_SHOTS.en.fixture
 /** The demo user's manifest (examples/demo), relative to the repository root. */
 export const DEMO_MANIFEST = 'examples/demo/manifest/habits.toml'
 
@@ -64,7 +72,7 @@ export function which(name: string): string | undefined {
 
 /**
  * An environment whose HOME is `<dir>/home` and whose PATH holds only the system directories plus links to
- * python3, git and gitleaks. Agent hosts installed on this machine (claude, codex, ...) stay out of reach, so
+ * python3, git, gitleaks and jq. Agent hosts installed on this machine (claude, codex, ...) stay out of reach, so
  * nothing about this machine shows up in what the engine prints.
  */
 export function fakeHome(dir: string): NodeJS.ProcessEnv {
@@ -80,6 +88,7 @@ export function fakeHome(dir: string): NodeJS.ProcessEnv {
     ['python3', python],
     ['git', which('git')],
     ['gitleaks', which('gitleaks')],
+    ['jq', which('jq')],
   ] as const) {
     if (path) symlinkSync(path, join(bin, name))
   }
@@ -301,18 +310,48 @@ export async function openChrome(work: string, lang = 'en-US'): Promise<Chrome> 
   }
 }
 
+/** Any CJK character: the English README media must not show one. */
+export const CJK = /[\u2e80-\u303e\u3041-\u33ff\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff\ufe30-\ufe4f\uff00-\uffef]/
+
+export interface PanelShot {
+  /** CSS px; the PNG has twice the pixels. */
+  width?: number
+  height?: number
+  /** The page language, sent as Accept-Language: 'en' or 'zh'. */
+  lang?: 'en' | 'zh'
+  /** A tab to open before the shot (a data-tab id: inbox, machines, matrix, relation, plugins). */
+  tab?: string
+}
+
 /**
- * Screenshot the panel at `url` in its light theme (the one the page draws on its own) at twice the pixels,
- * 1280×720 CSS px unless given. Fails if the visible page names this machine. Returns the PNG.
+ * Screenshot the panel at `url` in its light theme (the one the page draws on its own) at twice the pixels.
+ * Fails if the visible page names this machine, or shows Chinese when it should be English. Returns the PNG; the
+ * page stays as shot, so the caller can measure it.
  */
-export async function shootPanel(chrome: Chrome, url: string, { width = 1280, height = 720 } = {}): Promise<Buffer> {
+export async function shootPanel(
+  chrome: Chrome,
+  url: string,
+  { width = 1280, height = 720, lang = 'en', tab }: PanelShot = {},
+): Promise<Buffer> {
+  await chrome.page('Network.enable')
+  await chrome.page('Network.setExtraHTTPHeaders', { headers: { 'Accept-Language': lang === 'zh' ? 'zh-CN,zh' : 'en-US,en' } })
   await chrome.page('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-color-scheme', value: 'light' }] })
   await chrome.page('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: 2, mobile: false })
   await chrome.page('Page.navigate', { url })
   await chrome.until(PANEL_LOADED, 'the panel to draw')
+  if (tab) {
+    const found = await chrome.evaluate(
+      `(() => { const b = document.querySelector('[data-tab=${JSON.stringify(tab)}]'); b?.click(); return !!b })()`,
+    )
+    if (!found) fail(`the panel has no tab "${tab}". 修复：use one of the data-tab ids in panel/page.ts.`)
+  }
   await new Promise((r) => setTimeout(r, 600))
   // What the picture can show is the visible text; the copy-for-your-AI payloads hold the repository folder, but
   // they stay hidden in a shot.
-  assertAnonymous(await chrome.evaluate('document.body.innerText'), 'the visible text of the panel')
+  const text: string = await chrome.evaluate('document.body.innerText')
+  assertAnonymous(text, 'the visible text of the panel')
+  if (lang === 'en' && CJK.test(text)) {
+    fail(`the English panel shows Chinese: "${CJK.exec(text)?.[0]}". 修复：pick a fixture or tab whose text is all English.`)
+  }
   return chrome.screenshot()
 }

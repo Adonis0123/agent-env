@@ -16,9 +16,9 @@
 
 <p align="center"><a href="README.md">English</a> | 中文</p>
 
-https://github.com/user-attachments/assets/8e01810b-c097-4acf-9569-0fa1f11717c8
+https://github.com/user-attachments/assets/1892c19c-3a43-46d6-a52e-28c89b664790
 
-<img alt="笔记本、WSL、服务器 bot 和云端 bot 各抄一份规则，越改越不一样；agent-env 把规则放进一份清单，打包成插件，分三种方式送达，再用 doctor 逐个体检" src="docs/assets/demo.gif" width="1280">
+<img alt="25 秒看 agent-env：一份 habits.toml 连到 Mac、WSL、服务器 bot 和云端 bot；check 出每个插件的可见性；构建好的插件；两个落点合成出不同的 AGENTS.md；doctor 体检和「修复：」；面板" src="docs/assets/demo.zh-CN.gif" width="1280">
 
 ## 怎么运作
 
@@ -91,7 +91,7 @@ bin/agent-env plugin pointer --target grok-bot/bot --manifest "$M"   # 给云端
 面板把所有环境列成待办和矩阵（先 `npm --prefix panel test`，再
 `AGENT_ENV_STATUS_FILE=panel/fixtures/v8-plugins.json node panel/dev-server.ts`）：
 
-<img alt="Environments 面板：每个环境的落点、插件和 doctor 发现，每条都带修法" src="docs/assets/panel.png" width="1280">
+<img alt="Environments 面板：每个环境的落点、插件和 doctor 发现，每条都带修法" src="docs/assets/panel.zh-CN.png" width="1280">
 
 ## doctor 查什么
 
