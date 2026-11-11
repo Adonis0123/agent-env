@@ -33,7 +33,7 @@ PASS, WARN, FAIL = "PASS", "WARN", "FAIL"
 WARN_RATIO = 0.8
 # What to do when there is no manifest at all (a first run); shared with agent_env's own load error.
 NO_MANIFEST_HINT = ("还没有清单就把引擎的 profiles/_template/starter/ 复制到自己的私有仓库，"
-                    "在那里运行 bin/agent-env（见 README「Use it for your setup」）")
+                    "在那里运行 bin/agent-env（见 docs/guide/setup.md「Use it for your setup」）")
 
 
 class Report:

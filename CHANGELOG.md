@@ -6,6 +6,12 @@ All notable changes to this project are listed here. Versions follow [Semantic V
 
 ### Added
 
+- README rewritten in the shape of sideby's, all in a light theme: an illustrated banner, a 25-second demo GIF, an architecture diagram, the paragraph to paste
+  to an AI, the demo and links; a Chinese README (`README.zh-CN.md`). The setup steps, who it is for, what the user
+  does themselves and the demo environments moved to `docs/guide/setup.md`; commands, layout and development to
+  `docs/guide/commands.md`. Every pointer to "Use it for your setup" now names `docs/guide/setup.md`.
+- `scripts/record-demo.ts` retakes `docs/assets/demo.gif` from `docs/assets/demo.html` with real command output
+  (`--frames` for a quick look, `--mp4` for a video); `scripts/shoot-panel.ts` retakes the panel screenshots.
 - Vendored third-party skills: `vendor = ["name"]` in a plugin copies those `skill_sources` byte for byte from the
   local copy into `skills/<name>/`, with `UPSTREAM.md` (source, URL, path, upstream and local git tree ids,
   modified) and `UPSTREAM-LICENSE` inside the folder and a `vendor.json` index at the root. They leave

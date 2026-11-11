@@ -10,7 +10,7 @@
 | `README.md` | 本文件；复制后可以删掉，或改成这台机器的接入记录 |
 | `starter/` | 第一次安装用的最小个人层，不属于某台机器的档案；复制档案时不带上（第 3 步的命令只复制上面四个文件） |
 
-第一次安装、还没有清单时，先用 `starter/`：它是一份最小的个人层（一台机器、一个宿主），含 `manifest/habits.toml`、规则源 `sources/`、运行引擎的 `bin/agent-env` 和 `.gitignore`。整个目录复制到自己的私有仓库根目录，把引擎克隆到其中的 `vendor/agent-env/`，改清单里标了 `CHANGE` 的三处，再跑 `bin/agent-env check` 和 `bin/agent-env doctor`（步骤见引擎 `README.md` 的「Use it for your setup」）。接第二台机器时再用下面的档案文件。
+第一次安装、还没有清单时，先用 `starter/`：它是一份最小的个人层（一台机器、一个宿主），含 `manifest/habits.toml`、规则源 `sources/`、运行引擎的 `bin/agent-env` 和 `.gitignore`。整个目录复制到自己的私有仓库根目录，把引擎克隆到其中的 `vendor/agent-env/`，改清单里标了 `CHANGE` 的三处，再跑 `bin/agent-env check` 和 `bin/agent-env doctor`（步骤见引擎 `docs/guide/setup.md` 的「Use it for your setup」）。接第二台机器时再用下面的档案文件。
 
 档案只放个人层内容（机器名、账号、路径）。引擎代码（`engine/`、`bin/`）里不写这些。
 

@@ -4,7 +4,7 @@
 #   vps-helper a team server reached over ssh (remote-exec): a Hermes bot that pulls its plugins on a timer
 #   grok-bot   a cloud-hosted chat bot (cloud-hosted): it pulls the public plugin itself, from a pointer rule
 # Every name, path and repository here is fictional. Paths that start with ../ are relative to this file.
-# Try it from the repository root (see README.md "Quick start"):
+# Try it from the repository root (see README.md "Try the demo"):
 #   bin/agent-env check --manifest examples/demo/manifest/habits.toml
 
 schema = 1

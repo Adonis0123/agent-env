@@ -1,0 +1,954 @@
+<!doctype html>
+<!--
+  README demo scene. scripts/record-demo.ts runs the real commands on the demo manifest (examples/demo) with a
+  throwaway HOME, passes what they print in `?data=` together with a fresh panel screenshot in the same theme, then
+  seeks the timeline below frame by frame into docs/assets/demo.gif. The scene is light unless `?theme=dark`
+  asks for the dark set (kept for a look, not shipped). Every state is a pure function of the time t, so a seek
+  always draws the same frame. No third-party code: plain CSS and the script at the end.
+  Opened by hand without `?data=`, it only says how to fill it.
+-->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>agent-env demo</title>
+    <style>
+      :root {
+        --bg: #0a0d13;
+        --term: #0f141d;
+        --bar: #151b26;
+        --line: #1f2735;
+        --text: #d5dceb;
+        --muted: #6f7b91;
+        --faint: #465064;
+        --pass: #7fd88f;
+        --warn: #f2c66d;
+        --fail: #ff7f7a;
+        --info: #7cb7ff;
+        --public: #7fd88f;
+        --personal: #7cb7ff;
+        --company: #c39bff;
+        --local: #ffa36b;
+        --strong: #fff;
+        --on-accent: #0a0d13;
+        --badge-fg: #1a0b0b;
+        --dot: #ffffff10;
+        --glow: #7cb7ff22;
+        --doc-bg: #0b1018;
+        --doc-line: #1a2230;
+        --skel: #2a3446;
+        --tdot: #2b3445;
+        --chip-line: #33405a;
+        --chip-bg: #121a27;
+        --pick-line: #2b3a55;
+        --panel-line: #2c3442;
+        --panel-bg: #15171b;
+        --pill-bg: #0f141dee;
+        --drift-line: #ff7f7a66;
+        --fix-rgb: 242, 198, 109;
+        --shadow: #0008;
+        --shadow-strong: #000a;
+        --accent: #7cb7ff;
+        --card-shadow: 0 0 #0000;
+        --term-shadow: 0 30px 80px #0008;
+        --mono: ui-monospace, 'SF Mono', Menlo, Monaco, 'Cascadia Mono', 'PingFang SC', 'Hiragino Sans GB',
+          'Noto Sans Mono CJK SC', 'Microsoft YaHei', monospace;
+        --ui: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB', 'Noto Sans CJK SC',
+          'Microsoft YaHei', sans-serif;
+      }
+      /* The light set, the default: a warm grey ground, white surfaces with soft shadows, dark text and the
+         panel's own green as the accent (docs/assets/panel.png). ?theme=dark switches to the set above. */
+      :root[data-theme='light'] {
+        --bg: #ecebe6;
+        --term: #ffffff;
+        --bar: #f4f4f1;
+        --line: #d8d7d0;
+        --text: #26262b;
+        --muted: #66666d;
+        --faint: #a3a3a9;
+        --pass: #2f7d32;
+        --warn: #a44d00;
+        --fail: #c0392b;
+        --info: #1f66b8;
+        --public: #2f7d32;
+        --personal: #1f66b8;
+        --company: #7444bd;
+        --local: #c0560f;
+        --strong: #111114;
+        --on-accent: #ffffff;
+        --badge-fg: #ffffff;
+        --dot: #0000001c;
+        --glow: #43721d1f;
+        --doc-bg: #f7f7f4;
+        --doc-line: #e3e3dd;
+        --skel: #d3d3cc;
+        --tdot: #d3d3cc;
+        --chip-line: #c6c6bf;
+        --chip-bg: #ffffff;
+        --pick-line: #c3d3ea;
+        --panel-line: #d6d6d0;
+        --panel-bg: #f7f7f5;
+        --pill-bg: #ffffffee;
+        --drift-line: #c0392b66;
+        --fix-rgb: 164, 77, 0;
+        --shadow: #0000001c;
+        --shadow-strong: #00000024;
+        --accent: #43721d;
+        --card-shadow: 0 1px 2px #00000010, 0 10px 28px #00000012;
+        --term-shadow: 0 1px 3px #00000012, 0 24px 60px #0000001c;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      html,
+      body {
+        margin: 0;
+        background: var(--bg);
+      }
+      #stage {
+        position: relative;
+        width: 1280px;
+        height: 760px;
+        overflow: hidden;
+        background: var(--bg);
+        font-family: var(--ui);
+        color: var(--text);
+        perspective: 1600px;
+      }
+      #stage * {
+        position: absolute;
+      }
+      /* Text inside a positioned box flows normally. */
+      #stage .lines div {
+        position: relative;
+      }
+      #stage .lines span,
+      #stage .cap span,
+      #stage #steps span,
+      #stage #outro div,
+      #stage #outro span,
+      #stage #file small,
+      #stage #pick *,
+      #stage #s1note b,
+      #stage .col .h span,
+      #stage .foot * {
+        position: static;
+      }
+      #grid {
+        inset: 0;
+        background-image: radial-gradient(var(--dot) 1px, transparent 1.4px);
+        background-size: 28px 28px;
+        mask-image: radial-gradient(ellipse 75% 65% at 50% 50%, #000 30%, transparent 85%);
+      }
+      #glow {
+        left: 340px;
+        top: -360px;
+        width: 600px;
+        height: 600px;
+        border-radius: 50%;
+        background: radial-gradient(circle, var(--glow), transparent 65%);
+      }
+
+      /* Captions */
+      .cap {
+        left: 48px;
+        top: 30px;
+        width: 900px;
+      }
+      .cap .kick {
+        position: static;
+        display: block;
+        font: 600 13px/1 var(--mono);
+        color: var(--accent);
+        letter-spacing: 0.04em;
+      }
+      .cap .en {
+        position: static;
+        display: block;
+        margin-top: 10px;
+        font-size: 28px;
+        font-weight: 700;
+        letter-spacing: -0.015em;
+      }
+      .cap .zh {
+        position: static;
+        display: block;
+        margin-top: 6px;
+        font-size: 17px;
+        color: var(--muted);
+      }
+      #steps {
+        right: 48px;
+        top: 34px;
+        display: flex;
+        gap: 6px;
+      }
+      #steps span {
+        position: static;
+        padding: 5px 10px;
+        border-radius: 999px;
+        border: 1px solid var(--line);
+        font-size: 13px;
+        color: var(--muted);
+      }
+
+      /* Scene 1: one copy of the rules per agent */
+      .card {
+        top: 200px;
+        width: 220px;
+        height: 340px;
+        padding: 18px;
+        border-radius: 14px;
+        border: 1px solid var(--line);
+        background: var(--term);
+        box-shadow: var(--card-shadow);
+      }
+      .card .env {
+        left: 18px;
+        top: 18px;
+        font: 600 12px/1 var(--mono);
+      }
+      .card .host {
+        left: 18px;
+        top: 42px;
+        font-size: 21px;
+        font-weight: 700;
+      }
+      .card .path {
+        left: 18px;
+        top: 76px;
+        right: 12px;
+        font: 12px/1.3 var(--mono);
+        color: var(--muted);
+      }
+      .card .doc {
+        left: 18px;
+        right: 18px;
+        top: 122px;
+        height: 170px;
+        border-radius: 8px;
+        background: var(--doc-bg);
+        border: 1px solid var(--doc-line);
+      }
+      .card .doc i {
+        left: 14px;
+        height: 8px;
+        border-radius: 4px;
+        background: var(--skel);
+      }
+      .card .badge {
+        left: 18px;
+        bottom: 16px;
+        padding: 4px 9px;
+        border-radius: 999px;
+        font: 600 12px/1 var(--mono);
+        color: var(--badge-fg);
+        background: var(--fail);
+      }
+      #s1note {
+        left: 0;
+        right: 0;
+        top: 572px;
+        text-align: center;
+        font-size: 18px;
+        color: var(--muted);
+      }
+      #s1note b {
+        position: static;
+        color: var(--fail);
+        font-weight: 600;
+      }
+
+      /* Terminals */
+      .term {
+        border-radius: 12px;
+        border: 1px solid var(--line);
+        background: var(--term);
+        overflow: hidden;
+        box-shadow: var(--term-shadow);
+      }
+      .term .tbar {
+        left: 0;
+        right: 0;
+        top: 0;
+        height: 32px;
+        background: var(--bar);
+        border-bottom: 1px solid var(--line);
+      }
+      .term .tbar i {
+        top: 11px;
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        background: var(--tdot);
+      }
+      .term .tbar b {
+        left: 0;
+        right: 0;
+        top: 8px;
+        text-align: center;
+        font: 500 12px/16px var(--mono);
+        color: var(--muted);
+      }
+      .term .body {
+        left: 0;
+        right: 0;
+        top: 32px;
+        bottom: 0;
+        overflow: hidden;
+      }
+      .term .lines {
+        left: 16px;
+        right: 16px;
+        top: 12px;
+      }
+      .term .lines div {
+        position: relative;
+        white-space: pre;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        font-family: var(--mono);
+      }
+      .term.wrap .lines div {
+        white-space: pre-wrap;
+        overflow: visible;
+        margin-bottom: 6px;
+      }
+      .lines span {
+        position: static !important;
+      }
+      .lines .w {
+        display: inline-block;
+        width: 2ch;
+        text-align: center;
+      }
+      .prompt {
+        color: var(--pass);
+      }
+      .cmd {
+        color: var(--strong);
+        font-weight: 600;
+      }
+      .cursor {
+        display: inline-block;
+        width: 1ch;
+        background: var(--text);
+        color: transparent;
+      }
+      .pass {
+        color: var(--pass);
+      }
+      .warn {
+        color: var(--warn);
+      }
+      .fail {
+        color: var(--fail);
+      }
+      .info {
+        color: var(--info);
+      }
+      .muted {
+        color: var(--muted);
+      }
+      .strong {
+        color: var(--strong);
+        font-weight: 600;
+      }
+      .head {
+        color: var(--info);
+        font-weight: 600;
+      }
+      .fix {
+        color: var(--warn);
+        border-radius: 3px;
+      }
+
+      /* Scene 2: plugins stacked in order */
+      #file {
+        left: 890px;
+        top: 150px;
+        width: 340px;
+        padding: 12px 14px;
+        border-radius: 10px;
+        border: 1px dashed var(--chip-line);
+        font: 600 14px/1.2 var(--mono);
+        color: var(--strong);
+      }
+      #file small {
+        position: static;
+        display: block;
+        margin-top: 4px;
+        font: 12px var(--ui);
+        color: var(--muted);
+      }
+      .slab {
+        left: 890px;
+        width: 340px;
+        height: 62px;
+        padding: 0 14px;
+        border-radius: 10px;
+        border: 1px solid var(--line);
+        border-left-width: 4px;
+        background: var(--term);
+        box-shadow: var(--card-shadow);
+      }
+      .slab .n {
+        left: 16px;
+        top: 12px;
+        font: 600 15px/1.2 var(--mono);
+        color: var(--strong);
+      }
+      .slab .d {
+        left: 16px;
+        top: 35px;
+        font-size: 12px;
+        color: var(--muted);
+        white-space: nowrap;
+      }
+      .slab .v {
+        right: 12px;
+        top: 18px;
+        padding: 4px 9px;
+        border-radius: 999px;
+        font: 600 12px/1 var(--mono);
+        color: var(--on-accent);
+      }
+      #order {
+        left: 890px;
+        width: 340px;
+        top: 486px;
+        font-size: 13px;
+        color: var(--muted);
+      }
+      #pick {
+        left: 890px;
+        width: 340px;
+        top: 530px;
+        padding: 14px;
+        border-radius: 10px;
+        background: var(--chip-bg);
+        border: 1px solid var(--pick-line);
+        box-shadow: var(--card-shadow);
+        font: 13px/1.6 var(--mono);
+      }
+      #pick b {
+        position: static;
+        color: var(--strong);
+      }
+
+      /* Scene 3: three ways to deliver */
+      #hub {
+        left: 490px;
+        top: 136px;
+        width: 300px;
+        height: 44px;
+        border-radius: 10px;
+        border: 1px solid var(--chip-line);
+        background: var(--chip-bg);
+        box-shadow: var(--card-shadow);
+        text-align: center;
+        font: 600 15px/42px var(--mono);
+        color: var(--strong);
+      }
+      #wires {
+        left: 0;
+        top: 0;
+        width: 1280px;
+        height: 760px;
+        overflow: visible;
+      }
+      .col {
+        top: 222px;
+        width: 380px;
+        height: 506px;
+      }
+      .col .h {
+        left: 0;
+        top: 0;
+        right: 0;
+      }
+      .col .h .t {
+        position: static;
+        display: block;
+        font-size: 18px;
+        font-weight: 700;
+      }
+      .col .h .z {
+        position: static;
+        display: block;
+        margin-top: 4px;
+        font-size: 14px;
+        color: var(--muted);
+      }
+      .col .term {
+        left: 0;
+        right: 0;
+        top: 58px;
+        bottom: 0;
+        box-shadow: var(--card-shadow);
+      }
+      .col .foot {
+        left: 16px;
+        right: 16px;
+        bottom: 14px;
+        font: 600 13px/1.4 var(--mono);
+      }
+      .clock {
+        right: 18px;
+        bottom: 14px;
+        width: 58px;
+        height: 58px;
+        border-radius: 50%;
+        border: 2px solid var(--company);
+      }
+      .clock i {
+        left: 27px;
+        top: 6px;
+        width: 2px;
+        height: 22px;
+        background: var(--company);
+        transform-origin: 1px 22px;
+        border-radius: 1px;
+      }
+
+      /* Scene 4: doctor, then the panel */
+      #panel {
+        left: 120px;
+        top: 136px;
+        width: 1040px;
+        height: 556px;
+        border-radius: 12px;
+        overflow: hidden;
+        border: 1px solid var(--panel-line);
+        box-shadow: 0 40px 120px var(--shadow-strong);
+        background: var(--panel-bg);
+      }
+      #panel img {
+        left: 0;
+        top: 0;
+        width: 1040px;
+      }
+      #outro {
+        left: 0;
+        right: 0;
+        top: 704px;
+        display: flex;
+        justify-content: center;
+      }
+      #outro div {
+        position: static;
+        padding: 12px 22px;
+        border-radius: 999px;
+        background: var(--pill-bg);
+        border: 1px solid var(--chip-line);
+        font: 600 18px/1 var(--mono);
+        color: var(--strong);
+        box-shadow: 0 10px 40px var(--shadow-strong);
+      }
+      #outro span {
+        position: static;
+        color: var(--muted);
+        font-weight: 400;
+      }
+      #empty {
+        inset: 0;
+        display: grid;
+        place-items: center;
+        font: 16px var(--mono);
+        color: var(--muted);
+      }
+    </style>
+  </head>
+  <body>
+    <div id="stage"><div id="grid"></div><div id="glow"></div></div>
+    <script>
+      const stage = document.getElementById('stage')
+      const params = new URLSearchParams(location.search)
+      // ?theme=light|dark picks the colour set above; light when not given.
+      document.documentElement.dataset.theme = params.get('theme') === 'dark' ? 'dark' : 'light'
+      const data = params.has('data') ? JSON.parse(params.get('data')) : null
+
+      // ── time helpers: every state below is a function of t alone ──
+      const clamp = (x) => Math.min(1, Math.max(0, x))
+      const prog = (t, a, b) => clamp((t - a) / (b - a))
+      const ease = (x) => 1 - (1 - x) ** 3
+      const inOut = (t, a, b, c, d) => Math.min(ease(prog(t, a, b)), 1 - ease(prog(t, c, d)))
+      const frame = () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)))
+
+      function el(tag, attrs = {}, parent = stage) {
+        const node = document.createElement(tag)
+        for (const [k, v] of Object.entries(attrs)) {
+          if (k === 'html') node.innerHTML = v
+          else if (k === 'text') node.textContent = v
+          else if (k === 'style') Object.assign(node.style, v)
+          else node.setAttribute(k, v)
+        }
+        parent.appendChild(node)
+        return node
+      }
+      const esc = (s) => s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c])
+      // East Asian wide characters take two terminal columns; the CLI aligns its tables that way.
+      const WIDE =
+        /[ᄀ-ᅟ⺀-〾ぁ-㏿㐀-䶿一-鿿ꀀ-꓏가-힣豈-﫿︰-﹏＀-｠￠-￦]/
+      const cells = (s) => [...s].map((ch) => (WIDE.test(ch) ? `<span class="w">${esc(ch)}</span>` : esc(ch))).join('')
+
+      // Colour a line of CLI output; the words stay exactly as printed.
+      const STATE = { 已同步: 'pass', 已定制: 'info', 缺失: 'fail', 不一致: 'warn', 未知: 'muted' }
+      function paint(line) {
+        const segs = []
+        let rest = line
+        let m
+        if ((m = /^(PASS|WARN|FAIL)( .*)?$/.exec(line))) {
+          segs.push([m[1], m[1].toLowerCase()])
+          rest = m[2] ?? ''
+        } else if ((m = /^(\s+)(已同步|已定制|缺失|不一致|未知)(.*)$/.exec(line))) {
+          segs.push([m[1], ''], [m[2], STATE[m[2]]])
+          rest = m[3]
+        } else if (/^(落点|环境|合计|清单检查)/.test(line)) {
+          segs.push([line, 'strong'])
+          rest = ''
+        } else if (/^#/.test(line)) {
+          segs.push([line, 'head'])
+          rest = ''
+        } else if (/^<!--/.test(line)) {
+          segs.push([line, 'muted'])
+          rest = ''
+        }
+        const fix = rest.indexOf('修复：')
+        if (fix >= 0) segs.push([rest.slice(0, fix), ''], [rest.slice(fix), 'fix'])
+        else segs.push([rest, ''])
+        return segs.map(([s, c]) => (c ? `<span class="${c}">${cells(s)}</span>` : cells(s))).join('')
+      }
+
+      // A terminal whose commands are typed and whose output lines appear on a schedule.
+      // steps: {cmd, dur} types a command; {out: [...], every} prints lines; {wait} pauses.
+      function terminal(box, title, start, steps, { size = 13, lh = 19, wrap = false } = {}) {
+        const t = el('div', { class: `term${wrap ? ' wrap' : ''}`, style: box })
+        const bar = el('div', { class: 'tbar' }, t)
+        ;['#ff5f57', '#febc2e', '#28c840'].forEach((c, i) =>
+          el('i', { style: { left: `${14 + i * 16}px`, background: `${c}aa` } }, bar),
+        )
+        el('b', { text: title }, bar)
+        const body = el('div', { class: 'body' }, t)
+        const lines = el('div', { class: 'lines', style: { fontSize: `${size}px`, lineHeight: `${lh}px` } }, body)
+        const rows = []
+        let at = start
+        for (const s of steps) {
+          if (s.wait) at += s.wait
+          else if (s.cmd != null) {
+            rows.push({ node: el('div', {}, lines), cmd: s.cmd, t0: at, t1: at + s.dur })
+            at += s.dur + 0.2
+          } else if (s.out) {
+            for (const line of s.out) {
+              rows.push({ node: el('div', { html: (s.raw ? line : paint(line)) || '&nbsp;' }, lines), t0: at })
+              at += s.every
+            }
+          }
+        }
+        const capacity = Math.floor((parseFloat(box.height) - 32 - 24) / lh)
+        return {
+          node: t,
+          end: at,
+          update(now) {
+            let shown = 0
+            for (const r of rows) {
+              const on = now >= r.t0
+              r.node.style.display = on ? '' : 'none'
+              if (!on) continue
+              shown++
+              if (r.cmd != null) {
+                const n = Math.round(r.cmd.length * prog(now, r.t0, r.t1))
+                const typing = now < r.t1 + 0.2
+                r.node.innerHTML = `<span class="prompt">$</span> <span class="cmd">${cells(r.cmd.slice(0, n))}</span>${typing ? '<span class="cursor">_</span>' : ''}`
+              }
+            }
+            lines.style.transform = wrap ? '' : `translateY(${-Math.max(0, shown - capacity) * lh}px)`
+          },
+        }
+      }
+
+      function caption(kick, en, zh) {
+        const c = el('div', { class: 'cap' })
+        el('span', { class: 'kick', text: kick }, c)
+        el('span', { class: 'en', text: en }, c)
+        el('span', { class: 'zh', text: zh }, c)
+        return c
+      }
+      const fade = (node, o, dy = 0, scale = 1) => {
+        node.style.opacity = o
+        node.style.transform = `translateY(${dy}px) scale(${scale})`
+        node.style.visibility = o <= 0.001 ? 'hidden' : 'visible'
+      }
+
+      function build(d) {
+        const parts = []
+        const S1 = 0,
+          S2 = 5.2,
+          S3 = 11.4,
+          S4 = 17.6,
+          END = 25
+
+        // Step pills (top right)
+        const steps = el('div', { id: 'steps' })
+        const pills = ['1 痛点', '2 清单', '3 送达', '4 体检'].map((s) => el('span', { text: s }, steps))
+        const bounds = [S1, S2, S3, S4, END]
+        parts.push((t) => {
+          fade(steps, prog(t, 0.2, 0.7))
+          pills.forEach((p, i) => {
+            const on = t >= bounds[i] && t < bounds[i + 1]
+            p.style.color = on ? 'var(--on-accent)' : ''
+            p.style.background = on ? 'var(--accent)' : ''
+            p.style.borderColor = on ? 'var(--accent)' : ''
+          })
+        })
+
+        // ── Scene 1 ──
+        const cap1 = caption('1 / 4  THE PROBLEM', 'Every agent keeps its own copy of the rules', '每个 agent 各存一份规则文件，手抄迟早漂移')
+        const cards = [
+          { env: 'mac · laptop', host: 'Claude Code', path: '~/.claude/AGENTS.md', color: 'var(--public)' },
+          { env: 'mac · laptop', host: 'Codex', path: '~/.codex/AGENTS.md', color: 'var(--public)', drift: [2] },
+          { env: 'wsl', host: 'Claude Code', path: '~/.claude/AGENTS.md', color: 'var(--personal)' },
+          { env: 'vps-helper · server', host: 'Hermes bot', path: '~/.hermes/workspace/AGENTS.md', color: 'var(--company)', gone: [4, 5] },
+          { env: 'grok-bot · cloud', host: 'Grok bot', path: 'memory, in the app', color: 'var(--local)', drift: [1] },
+        ].map((c, i) => {
+          const node = el('div', { class: 'card', style: { left: `${50 + i * 240}px` } })
+          el('div', { class: 'env', text: c.env, style: { color: c.color } }, node)
+          el('div', { class: 'host', text: c.host }, node)
+          el('div', { class: 'path', text: c.path }, node)
+          const doc = el('div', { class: 'doc' }, node)
+          const widths = [70, 130, 110, 140, 90, 120, 60]
+          const bars = widths.map((w, j) => el('i', { style: { top: `${16 + j * 21}px`, width: `${w}px` } }, doc))
+          const badge = c.drift || c.gone ? el('div', { class: 'badge', text: c.gone ? '≠ 2 rules missing' : '≠ drifted' }, node) : null
+          return { node, bars, badge, c }
+        })
+        const note = el('div', {
+          id: 's1note',
+          html: 'Copied by hand from one file to the next, <b>they drift apart</b> · 手抄一份改一份，很快就对不上',
+        })
+        parts.push((t) => {
+          const out = 1 - ease(prog(t, S2 - 0.5, S2))
+          fade(cap1, Math.min(ease(prog(t, 0.1, 0.6)), out), 0)
+          cards.forEach((k, i) => {
+            const a = ease(prog(t, 0.4 + i * 0.22, 0.9 + i * 0.22))
+            fade(k.node, Math.min(a, out), (1 - a) * 24 - (1 - out) * 16)
+            const drift = ease(prog(t, 2.5 + i * 0.12, 3.1 + i * 0.12))
+            k.bars.forEach((b, j) => {
+              const bad = k.c.drift?.includes(j)
+              const gone = k.c.gone?.includes(j)
+              b.style.background = bad && drift > 0.5 ? 'var(--fail)' : ''
+              b.style.transform = bad ? `translateX(${drift * 18}px)` : ''
+              b.style.opacity = gone ? 1 - drift * 0.85 : 1
+            })
+            if (k.badge) fade(k.badge, drift, (1 - drift) * 6)
+            k.node.style.borderColor = k.badge && drift > 0.5 ? 'var(--drift-line)' : ''
+          })
+          fade(note, Math.min(ease(prog(t, 3.2, 3.8)), out))
+        })
+
+        // ── Scene 2 ──
+        const cap2 = caption(
+          '2 / 4  ONE MANIFEST',
+          'One manifest, plugins with a visibility, stacked in order',
+          '一份清单（manifest/habits.toml）+ 带可见性的插件，按顺序叠加',
+        )
+        const t2 = terminal(
+          { left: '40px', top: '140px', width: '820px', height: '590px' },
+          'agent-env — check · plugin build',
+          S2 + 0.6,
+          [
+            { out: [`M=${d.manifest}`], every: 0 },
+            { cmd: d.check.cmd, dur: 0.8 },
+            { out: d.check.lines, every: 0.11 },
+            { wait: 0.3 },
+            { cmd: d.build.cmd, dur: 0.6 },
+            { out: d.build.lines, every: 0.12 },
+          ],
+        )
+        const file = el('div', { id: 'file', html: `manifest/habits.toml<small>targets · environments · plugins · rule sections</small>` })
+        const layers = [
+          { n: 'demo-public', v: 'public', d: 'Shared rules and a demo skill', c: 'var(--public)' },
+          { n: 'demo-personal', v: 'personal', d: "The demo user's own workflow", c: 'var(--personal)' },
+          { n: 'demo-company', v: 'company', d: 'Rules and skills for the team server', c: 'var(--company)' },
+          { n: 'demo-mac', v: 'local', d: 'Patch layer of the laptop', c: 'var(--local)' },
+        ].map((l, i) => {
+          const node = el('div', { class: 'slab', style: { top: `${222 + i * 66}px`, borderLeftColor: l.c } })
+          el('div', { class: 'n', text: l.n }, node)
+          el('div', { class: 'd', text: l.d }, node)
+          el('div', { class: 'v', text: l.v, style: { background: l.c } }, node)
+          return { node, l }
+        })
+        const order = el('div', { id: 'order', text: 'later plugins append · 后面的插件接在前面之后；local 是本机补丁层，从不推送' })
+        const pick = el('div', {
+          id: 'pick',
+          html: `<b>mac/claude-code</b> = demo-public<br>&nbsp;&nbsp;→ demo-personal → demo-mac<br><span class="muted">composed into ~/.claude/AGENTS.md</span>`,
+        })
+        parts.push((t) => {
+          const vis = inOut(t, S2, S2 + 0.5, S3 - 0.5, S3)
+          fade(cap2, vis)
+          fade(t2.node, vis, (1 - ease(prog(t, S2 + 0.1, S2 + 0.6))) * 20)
+          t2.update(t)
+          fade(file, Math.min(vis, ease(prog(t, S2 + 0.8, S2 + 1.2))))
+          const pickT = ease(prog(t, S2 + 4.3, S2 + 4.8))
+          layers.forEach((k, i) => {
+            const a = ease(prog(t, S2 + 1.3 + i * 0.45, S2 + 1.8 + i * 0.45))
+            fade(k.node, Math.min(vis, a) * (k.l.n === 'demo-company' ? 1 - pickT * 0.7 : 1), 0)
+            k.node.style.transform = `translateX(${(1 - a) * 60}px)`
+            k.node.style.boxShadow =
+              k.l.n !== 'demo-company' && pickT > 0 ? `0 0 0 ${pickT}px ${k.l.c}, var(--card-shadow)` : ''
+          })
+          fade(order, Math.min(vis, ease(prog(t, S2 + 3.3, S2 + 3.7))))
+          fade(pick, Math.min(vis, pickT), (1 - pickT) * 10)
+        })
+
+        // ── Scene 3 ──
+        const cap3 = caption(
+          '3 / 4  DELIVERY',
+          'Three ways to deliver',
+          '本机合成 AGENTS.md · 服务器 systemd 定时器自己拉 · 云端 bot 按一条指路规则自己拉',
+        )
+        const hub = el('div', { id: 'hub', text: 'manifest/habits.toml' })
+        const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg')
+        svg.id = 'wires'
+        stage.appendChild(svg)
+        const colX = [40, 450, 860]
+        const colors = ['var(--public)', 'var(--company)', 'var(--local)']
+        const wires = colX.map((x, i) => {
+          const p = document.createElementNS('http://www.w3.org/2000/svg', 'path')
+          const sx = 560 + i * 80
+          const ex = x + 190
+          p.setAttribute('d', `M${sx},180 C${sx},205 ${ex},195 ${ex},220`)
+          p.setAttribute('fill', 'none')
+          p.setAttribute('stroke', getComputedStyle(document.documentElement).getPropertyValue(colors[i].slice(4, -1)).trim())
+          p.setAttribute('stroke-width', '2')
+          p.setAttribute('pathLength', '1')
+          p.setAttribute('stroke-dasharray', '1')
+          svg.appendChild(p)
+          return p
+        })
+        function column(i, title, zh) {
+          const c = el('div', { class: 'col', style: { left: `${colX[i]}px` } })
+          const h = el('div', { class: 'h' }, c)
+          el('span', { class: 't', text: title, style: { color: colors[i] } }, h)
+          el('span', { class: 'z', text: zh }, h)
+          return c
+        }
+        const c1 = column(0, 'Laptop · composed here', '本机：按插件顺序合成')
+        const c2 = column(1, 'Server · pulls on a timer', '服务器：systemd 用户定时器自己 git pull')
+        const c3 = column(2, 'Cloud bot · one pointer rule', '云端 bot：存一条指路规则，它自己拉')
+        const T1 = S3 + 0.6,
+          T2 = S3 + 2.1,
+          T3 = S3 + 3.6
+        const k1 = terminal({ left: '0', top: '58px', width: '380px', height: '448px' }, 'render', T1, [
+          { cmd: d.render.cmd, dur: 0.6 },
+          { out: d.render.lines, every: 0.05 },
+        ], { size: 12, lh: 17 })
+        c1.appendChild(k1.node)
+        const foot1 = el('div', { class: 'foot', html: `<span class="pass">→</span> ${esc(d.render.output)}` }, k1.node)
+        foot1.style.background = 'var(--term)'
+        const k2 = terminal({ left: '0', top: '58px', width: '380px', height: '448px' }, 'vps-helper/hermes', T2, [
+          { out: ['# manifest/habits.toml, [[targets]] vps-helper/hermes'], every: 0.1 },
+          { out: [d.pull], every: 0.3 },
+          { cmd: d.check.cmd, dur: 0.5 },
+          { out: [d.remote], every: 0.3 },
+        ], { size: 12, lh: 17, wrap: true })
+        c2.appendChild(k2.node)
+        const clock = el('div', { class: 'clock' }, k2.node)
+        const hand = el('i', {}, clock)
+        const clockNote = el('div', { class: 'foot', html: '<span style="color:var(--company)">systemd user timer</span><br><span class="muted">agent-env-pull.timer → git pull</span>' }, k2.node)
+        clockNote.style.right = '90px'
+        const k3 = terminal({ left: '0', top: '58px', width: '380px', height: '448px' }, 'pointer', T3, [
+          { cmd: d.pointer.cmd, dur: 0.6 },
+          { out: d.pointer.lines, every: 0.4 },
+        ], { size: 12, lh: 17, wrap: true })
+        c3.appendChild(k3.node)
+        parts.push((t) => {
+          const vis = inOut(t, S3, S3 + 0.5, S4 - 0.5, S4)
+          fade(cap3, vis)
+          fade(hub, vis, (1 - ease(prog(t, S3, S3 + 0.5))) * -10)
+          wires.forEach((w, i) => {
+            const a = ease(prog(t, [T1, T2, T3][i] - 0.5, [T1, T2, T3][i]))
+            w.setAttribute('stroke-dashoffset', String(1 - a))
+            w.style.opacity = vis
+          })
+          ;[c1, c2, c3].forEach((c, i) => {
+            const a = ease(prog(t, [T1, T2, T3][i] - 0.3, [T1, T2, T3][i] + 0.2))
+            fade(c, Math.min(vis, a), (1 - a) * 20)
+          })
+          k1.update(t)
+          k2.update(t)
+          k3.update(t)
+          fade(foot1, ease(prog(t, k1.end, k1.end + 0.3)))
+          const ck = ease(prog(t, k2.end, k2.end + 0.3))
+          fade(clock, ck)
+          fade(clockNote, ck)
+          hand.style.transform = `rotate(${Math.max(0, t - T2) * 240}deg)`
+        })
+
+        // ── Scene 4 ──
+        const cap4 = caption(
+          '4 / 4  DOCTOR',
+          'doctor checks every target; each finding says how to fix it',
+          'doctor 逐个落点体检，每条发现都带「修复：」',
+        )
+        const cap5 = caption('4 / 4  PANEL', '…and the panel shows every environment on one page', '面板一页看全部环境，有问题的排在最前')
+        const t4 = terminal(
+          { left: '40px', top: '140px', width: '1200px', height: '590px' },
+          'agent-env doctor',
+          S4 + 0.6,
+          [
+            { cmd: d.doctor.cmd, dur: 0.7 },
+            { out: d.doctor.lines, every: 0.05 },
+          ],
+        )
+        const panel = el('div', { id: 'panel' })
+        el('img', { src: d.panel, alt: '' }, panel)
+        const outro = el('div', { id: 'outro', html: '<div>agent-env <span>· github.com/Adonis0123/agent-env</span></div>' })
+        const P = S4 + 4.0
+        parts.push((t) => {
+          const vis = ease(prog(t, S4, S4 + 0.5))
+          fade(cap4, Math.min(vis, 1 - ease(prog(t, P - 0.3, P))))
+          fade(cap5, ease(prog(t, P, P + 0.4)))
+          fade(t4.node, vis * (1 - 0.75 * ease(prog(t, P, P + 0.8))), (1 - vis) * 20)
+          t4.update(t)
+          const glow = inOut(t, t4.end, t4.end + 0.3, P - 0.2, P + 0.4)
+          for (const f of t4.node.querySelectorAll('.fix')) f.style.background = `rgba(var(--fix-rgb), ${0.22 * glow})`
+          const p = ease(prog(t, P, P + 0.9))
+          panel.style.opacity = p
+          panel.style.visibility = p > 0 ? 'visible' : 'hidden'
+          panel.style.transform = `translateY(${(1 - p) * 90}px) rotateX(${(1 - p) * 12}deg) scale(${0.94 + 0.06 * p})`
+          fade(outro, ease(prog(t, P + 1.5, P + 2)), (1 - ease(prog(t, P + 1.5, P + 2))) * 10)
+        })
+
+        return { total: END, update: (t) => parts.forEach((f) => f(t)), image: panel.querySelector('img') }
+      }
+
+      if (!data) {
+        el('div', { id: 'empty', text: 'This scene is filled by scripts/record-demo.ts: node scripts/record-demo.ts --frames 3' })
+        window.demo = { total: 0, ready: Promise.resolve(true), seek: async () => {} }
+      } else {
+        const scene = build(data)
+        const loaded = scene.image.complete
+          ? Promise.resolve()
+          : new Promise((r) => scene.image.addEventListener('load', r, { once: true }))
+        window.demo = {
+          total: scene.total,
+          ready: Promise.all([document.fonts.ready, loaded]).then(() => true),
+          // Used by scripts/record-demo.ts: put the timeline at `t` seconds and wait for paint.
+          async seek(t) {
+            scene.update(t)
+            await frame()
+          },
+        }
+        scene.update(0)
+        if (!params.has('record')) {
+          // Opened by hand with data: play it in a loop.
+          const t0 = performance.now()
+          const tick = () => {
+            scene.update(((performance.now() - t0) / 1000) % scene.total)
+            requestAnimationFrame(tick)
+          }
+          requestAnimationFrame(tick)
+        }
+      }
+    </script>
+  </body>
+</html>

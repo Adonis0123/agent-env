@@ -1,5 +1,5 @@
 # Starter manifest: one machine, one agent host. Copy the whole starter/ directory into your own private
-# repository (README.md "Use it for your setup"), then change the three places marked CHANGE.
+# repository (docs/guide/setup.md "Use it for your setup"), then change the three places marked CHANGE.
 # Paths that start with ../ are relative to this file. Every key here is required by `bin/agent-env check`.
 # A bigger example with four environments: examples/demo/manifest/habits.toml in the engine.
 

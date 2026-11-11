@@ -20,7 +20,7 @@ description: Runbook for the agent habit engine (agent-env) on Mac, WSL or a rem
 | 发布规则 / 同步到 bot | 第 4 节：`$REPO/bin/agent-env plugin publish --all` 先演练，把仓库、可见性、待推送内容给用户看；用户确认后加 `--yes`。云端 bot 再给出指路规则 | 确认推送；登录 GitHub；在 bot 的 app 里粘贴指路规则并说「存好了」 |
 | 加一台机器 / 加一个 agent | 第 3 节：在 `$REPO` 里建 `profiles/<环境>/`，从引擎的 `profiles/_template/`（引擎在 `vendor/agent-env/` 时是 `$REPO/vendor/agent-env/profiles/_template/`）复制四个档案文件，不带 `starter/`，命令见该目录 `README.md` 第 3 步；查实新宿主那张表 → 在清单加环境和 `[[targets]]` → `check` → `doctor` → `status --commit` | 在新机器上登录；确认角色（`cli` / `bot` / `cron` / `remote`） |
 
-第一次安装（还没有清单）：按引擎 `README.md` 的「Use it for your setup」，从 `profiles/_template/starter/` 复制出个人层，再回到上表。
+第一次安装（还没有清单）：按引擎 `docs/guide/setup.md` 的「Use it for your setup」，从 `profiles/_template/starter/` 复制出个人层，再回到上表。
 
 面板给用户看的词和引擎内部叫法不同，看到页面用词时按下表对应：
 
