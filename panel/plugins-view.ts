@@ -159,6 +159,11 @@ export interface PluginsKit {
   aiCopy: (what: string, commands?: string[], o?: { careful?: boolean; quiet?: boolean }) => string;
   /** the same button for a fix written as a sentence: copies the problem with the whole fix quoted (ai-copy.ts aiFixText) */
   aiFix: (problem: string, fix: string) => string;
+  /** the buttons under a path of this view: copy it, and on this machine look at it or open it (files.ts fileRow).
+   *  The view is worked out on the machine that ran the check, so its paths are that machine's. */
+  file: (path: string) => string;
+  /** a command as code, each word wrapping as a unit (page.ts codeHtml) */
+  code: (cmd: string) => string;
 }
 
 const VIS_LABEL: Record<Visibility, string> = { public: "Public", personal: "Personal", company: "Company", local: "This machine" };
@@ -184,7 +189,7 @@ const isCommand = (fix: string) => /^bin\/agent-env\s/.test(fix) && !/[，。；
 /** A command the AI runs: the 「复制给 AI」 button first, the command itself as quiet code after it. `what` says what
  *  the command is for, in the page's language. */
 function copyLine(k: PluginsKit, what: string, cmd: string, quiet = true, careful = !readsOnly(cmd)): string {
-  return `<span class="pv-cmd">${k.aiCopy(what, [cmd], { careful, quiet })}<code>${k.esc(cmd)}</code></span>`;
+  return `<span class="pv-cmd">${k.aiCopy(what, [cmd], { careful, quiet })}${k.code(cmd)}</span>`;
 }
 
 /** How to fix `problem` (what is wrong, in the page's language): a command, or a one-line remedy in words. Either way
@@ -222,7 +227,7 @@ function notesHtml(k: PluginsKit, notes: PvNote[], about: string): string {
 
 function sourceNode(k: PluginsKit, v: PluginsView, s: PvSource): string {
   const what = s.provides.map((p) => k.t(PROVIDES[p] ?? p)).join(k.lang === "zh" ? "、" : ", ");
-  return `<li class="pv-node">${repoLine(k, repoOf(v, s.repo), s.name)}<p class="pv-sub">${k.esc(s.path)}</p>${what ? `<p class="pv-what">${k.esc(what)}</p>` : ""}</li>`;
+  return `<li class="pv-node">${repoLine(k, repoOf(v, s.repo), s.name)}<p class="pv-sub">${k.esc(s.path)}</p>${k.file(s.path)}${what ? `<p class="pv-what">${k.esc(what)}</p>` : ""}</li>`;
 }
 
 function generatorNode(k: PluginsKit, v: PluginsView): string {
@@ -234,7 +239,7 @@ function generatorNode(k: PluginsKit, v: PluginsView): string {
     const [ps, pw] = PUBLISH[p.publish.state] ?? ["unknown", "publish state unknown"];
     return `<li class="pv-plugin"><span class="pv-pl-h"><span class="pv-pl">${k.esc(p.name)}</span><span class="pv-tag" data-tip="${k.esc(k.t(VIS_TIP[p.visibility]))}">${k.esc(k.t(VIS_LABEL[p.visibility]))}</span></span><span class="pv-pl-s">${k.mark(bs, k.t(bw), p.build.detail)}${k.mark(ps, k.t(pw), p.publish.detail)}</span>${p.build.fix ? fixText(k, p.build.fix, `${p.name}: ${k.t(bw)}`) : ""}</li>`;
   }).join("");
-  return `<li class="pv-node">${repoLine(k, repoOf(v, g.repo), g.name)}<p class="pv-sub">${k.esc(k.t("Builds into {path}", { path: g.output }))}</p>${own}${plugins ? `<ul class="pv-plugins">${plugins}</ul>` : `<p class="pv-sub">${k.esc(k.t("No plugins defined"))}</p>`}</li>`;
+  return `<li class="pv-node">${repoLine(k, repoOf(v, g.repo), g.name)}<p class="pv-sub">${k.esc(k.t("Builds into {path}", { path: g.output }))}</p>${k.file(g.output)}${own}${plugins ? `<ul class="pv-plugins">${plugins}</ul>` : `<p class="pv-sub">${k.esc(k.t("No plugins defined"))}</p>`}</li>`;
 }
 
 function repoNode(k: PluginsKit, v: PluginsView, c: PvPluginRepo): string {
@@ -328,7 +333,7 @@ export const PLUGINS_CSS = `
   .pv-refresh { margin-left: 8px; }
   .pv-acts { display: flex; gap: 8px; margin-left: auto; }
   .pv-cmd { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 4px; min-width: 0; max-width: 100%; }
-  .pv-cmd code { padding: 0 4px; border-radius: 4px; background: var(--kit-surface-muted, #f4f4f4); overflow-wrap: anywhere; }
+  .pv-cmd code { padding: 0 4px; border-radius: 4px; background: var(--kit-surface-muted, #f4f4f4); overflow-wrap: break-word; }
   .pv-sec + .pv-sec { margin-top: 40px; }
   .pv-h { margin-bottom: 12px; font-size: 15px; font-weight: 600; line-height: 20px; }
   .pv-flow { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 24px; align-items: start; }
@@ -347,7 +352,7 @@ export const PLUGINS_CSS = `
   .pv-for { font-size: 12px; color: var(--kit-muted, #666); }
   .pv-sub { font-size: 12px; color: var(--kit-muted, #666); overflow-wrap: anywhere; }
   .pv-what { font-size: 12px; color: var(--kit-text, inherit); overflow-wrap: anywhere; }
-  .pv-why, .pv-fix { font-size: 12px; color: var(--kit-muted, #666); overflow-wrap: anywhere; }
+  .pv-why, .pv-fix { font-size: 12px; color: var(--kit-muted, #666); overflow-wrap: break-word; }
   .pv-node .pv-cmd, .pv-notes .pv-cmd { font-size: 12px; }
   /* a repository's visibility: quiet words in a hairline frame; unknown is dashed and faint, the fix sits under it */
   .pv-vis { display: inline-flex; align-items: center; gap: 4px; height: 20px; padding: 0 6px; border: 1px solid var(--kit-border-strong, #ccc); border-radius: 4px; font-size: 12px; font-weight: 500; line-height: 1; color: var(--kit-text, inherit); white-space: nowrap; }

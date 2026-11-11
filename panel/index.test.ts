@@ -128,11 +128,11 @@ test("v5: three tabs, the same five things to do in each with the same title and
   // the inbox, grouped by actor in order
   const inbox = rendered(html, "inbox");
   assert.deepEqual(inbox, [
-    "ai | Codex 在「对外发送前先问你」抽测里没守规则",
+    "ai | Codex 在「对外发送前先问你」规则测试里没守规则",
     "user | Grok Bot 的指路规则还没投递",
     "user | 云主机上的小 helper（Hermes）缺少规则文件 AGENTS.md",
     "other_env | WSL 没有上报状态",
-    "notice | Claude Code 有 2 个抽测没测成",
+    "notice | Claude Code 有 2 项规则测试没测成",
   ]);
   assert.deepEqual([...html.matchAll(/<section class="group" data-group="(\w+)">/g)].map((m) => m[1]), ["ai", "user", "other_env", "notice"]);
   // same set in the other two tabs
@@ -158,13 +158,13 @@ test("v5: three tabs, the same five things to do in each with the same title and
   // one glossary, in a drawer opened from the footer; the CLI's own names only inside a row's folded part
   assert.equal([...html.matchAll(/<dialog class="drawer" id="gloss"/g)].length, 1);
   assert.match(html, /<button type="button" class="linkish" data-gloss[^>]*>Glossary<\/button>/);
-  assert.match(html, /漂移<span class="raw">drift<\/span><\/dt><dd>和清单期望的不一样，要修<\/dd>/);
-  assert.match(html, /<div class="todo-more" id="in-1" hidden>.*?<p class="raw-line"><span>Internal name, for your AI<\/span><code>rules · 指路规则 · missing<\/code><\/p><\/div>/s);
+  assert.match(html, /不一致<span class="raw">drift<\/span><\/dt><dd>和清单期望的不一样，要修<\/dd>/);
+  assert.match(html, /<div class="todo-more" id="in-1" hidden>.*?<p class="raw-line"><span>Internal name, for your AI<\/span><code><span class="tok">rules<\/span> <span class="tok">·<\/span> <span class="tok">指路规则<\/span> <span class="tok">·<\/span> <span class="tok">missing<\/span><\/code><\/p><\/div>/s);
   // every row: one main button, then "more"; nothing else outside the folded part
   for (const m of inboxPart.matchAll(/<div class="todo-acts">(.*?)<\/div><div class="todo-more"/gs)) assert.equal([...m[1].matchAll(/<button /g)].length, 2, m[1]);
   assert.deepEqual([...inboxPart.matchAll(/<article class="todo"[^>]*data-actor="(\w+)">.*?<div class="todo-acts"><button [^>]*>([^<]+)</gs)].map((m) => `${m[1]} ${m[2]}`), ["ai Let AI fix it", "user Let AI fix it", "user Let AI fix it", "other_env Copy for AI", "notice Let AI read the logs"]);
   // steps with copy, the confirm step shows the dry run only
-  assert.match(html, /<li class="step is-confirm" id="in-2-s1">.*?look at the dry run, then confirm.*?<code>bin\/agent-env deliver --target vps-helper\/hermes --dry-run<\/code>/s);
+  assert.match(html, /<li class="step is-confirm" id="in-2-s1">.*?look at the dry run, then confirm.*?<code><span class="tok">bin\/agent-env<\/span> <span class="tok">deliver<\/span> <span class="tok">--target<\/span> <span class="tok">vps-helper\/hermes<\/span> <span class="tok">--dry-run<\/span><\/code>/s);
   // the confirming --yes is never shown as a command; it only travels inside a fix quoted whole for an AI, which
   // ends with "show me first"
   assert.doesNotMatch(html.replace(/data-copy="[^"]*"/g, ""), /--yes/);
@@ -301,11 +301,11 @@ test("a report without issues: one \"update the engine\" thing to do, the same i
   const inbox = html.slice(html.indexOf('id="panel-inbox"'), html.indexOf('id="panel-machines"'));
   assert.ok(inbox.length > 0);
   assert.doesNotMatch(inbox, /mcp sync --target|data-ask="fix-drift"|data-ask-all/);
-  assert.match(html, /<code>bin\/agent-env status --json --all --fetch<\/code><button[^>]*data-copy="Please do step 2 of 2 of [^"]*\. On this machine, in the folder \/home\/example-user\/agent-home: Check that the new report has a to-do list\. Run: bin\/agent-env status --json --all --fetch\."/, "the only command is the read-only check, copied as a sentence for an AI");
+  assert.match(html, /<code><span class="tok">bin\/agent-env<\/span> <span class="tok">status<\/span> <span class="tok">--json<\/span> <span class="tok">--all<\/span> <span class="tok">--fetch<\/span><\/code><button[^>]*data-copy="Please do step 2 of 2 of [^"]*\. On this machine, in the folder \/home\/example-user\/agent-home: Check that the new report has a to-do list\. Run: bin\/agent-env status --json --all --fetch\."/, "the only command is the read-only check, copied as a sentence for an AI");
   assert.doesNotMatch(html, /status --commit|--push|--env /, "nothing sends the user to another machine or writes a status branch");
   assert.match(html, /Drift<span class="raw">drift<\/span><\/dt>/, "the panel's glossary when the report has none");
   const zh = await (await serve({ statusFile: FIX("drift"), lang: "zh" })).fragment();
-  assert.match(zh, /漂移<span class="raw">drift<\/span><\/dt><dd>和清单期望的不一样，要修<\/dd>/);
+  assert.match(zh, /不一致<span class="raw">drift<\/span><\/dt><dd>和清单期望的不一样，要修<\/dd>/);
   assert.ok(zh.includes("状态报告是旧版引擎生成的，列不出待办"));
 });
 
@@ -374,7 +374,7 @@ test("timeoutMs is configurable: a CLI slower than it shows the timeout panel", 
 test("Chinese strings", async () => {
   const { fragment } = await serve({ statusFile: FIX5("issues"), lang: "zh", now: () => NOW5, ask: { bridge: "postMessage" } });
   const html = await fragment();
-  for (const s of ["环境", "vps-helper 今天", "5 件事要处理", "AI 能修<span class=\"num\"> · 1", "待办", "按机器", "总览", "让 AI 修复", "让 AI 准备", "让 AI 查日志", "先看演练再确认", "待办&nbsp;<span class=\"inbox-count num\">5</span>", "上次上报：", "复制给 AI", "术语说明", "内部名称（给 AI 看）", "谁来处理", "有问题 5", "其余 6 个正常", "还没上报过"]) assert.ok(html.includes(s), s);
+  for (const s of ["环境", "vps-helper 今天", "5 件事要处理", "AI 能修<span class=\"num\"> · 1", "待办", "按机器", "总览", "让 AI 修复", "让 AI 准备", "让 AI 查日志", "先看演练再确认", "待办&nbsp;<span class=\"inbox-count num\">5</span>", "上次上报：", "复制给 AI", "术语说明", "给 AI 看的名称", "谁来处理", "有问题 5", "其余 6 个正常", "还没上报过"]) assert.ok(html.includes(s), s);
   for (const s of ["全部让 AI 修复（1）", "去确认", "件待办：", "现在要做什么", "这些词是什么意思", "看步骤和命令", "看步骤", "共 5 件待办", "复制 2 条命令", "复制命令", "命令行里的原始叫法"]) assert.ok(!html.replace(/data-copy="[^"]*"/g, "").includes(s), `gone in v6: ${s}`);
   const ok = await serve({ statusFile: FIX5("ok"), lang: "zh", now: () => NOW5 });
   assert.match(await ok.fragment(), /一切正常/);
@@ -430,10 +430,10 @@ test("v7 relation tab: sources and machine boxes, four cells per agent, paths an
   const pane = /<section class="rel-pane" data-pane="a:mac\/codex" data-default-kind="mcp" hidden>([\s\S]*?)<\/section>(?=<section class="rel-pane"|<\/div>)/.exec(panel)![1];
   assert.match(pane, /<button type="button" class="lt-seg-item rp-chip" data-focus="ak:mac\/codex\|mcp" data-keep data-chip="mcp" aria-pressed="true">/);
   assert.match(pane, /<span class="rp-chip is-empty"/, "a kind with nothing registered is not a button");
-  assert.match(pane, /<section class="rp-kind" data-kind="mcp"><p class="rp-src">来自 <span class="rp-src-name" tabindex="0" data-tip="~\/coding\/agent-env\/manifest\/habits\.toml">清单登记<\/span><button type="button" class="linkish rp-copy" data-copy="~\/coding\/agent-env\/manifest\/habits\.toml">复制路径<\/button><\/p><ul class="rp-bad"><li><p class="rp-line"><span class="rp-name">figma<\/span>/);
+  assert.match(pane, /<section class="rp-kind" data-kind="mcp"><p class="rp-src">来自 <span class="rp-src-name" tabindex="0" data-tip="~\/coding\/agent-env\/manifest\/habits\.toml">清单登记<\/span><\/p><div class="fv" data-fv><p class="fv-acts"><button type="button" class="linkish" data-copy="~\/coding\/agent-env\/manifest\/habits\.toml" data-tip="~\/coding\/agent-env\/manifest\/habits\.toml">复制路径<\/button><button type="button" class="linkish" data-view="[0-9a-f]{16}" aria-expanded="false">查看内容<\/button><span class="fv-open" data-open-path="~\/coding\/agent-env\/manifest\/habits\.toml" data-open-name="habits\.toml" hidden><\/span><\/p><div class="fv-body" hidden><p class="fv-cap">~\/coding\/agent-env\/manifest\/habits\.toml<\/p><p class="fv-state" role="status"><\/p><p class="fv-intro" hidden>这个文件夹里有：<\/p><pre class="fv-text" tabindex="0" hidden><\/pre><\/div><\/div><ul class="rp-bad"><li><p class="rp-line"><span class="rp-name">figma<\/span>/);
   assert.match(pane, /<details class="rp-rest"><summary><span class="chev" aria-hidden="true"><\/span>1 项[^<]+<\/summary>.*?kimi-cu/s);
   assert.match(pane, /<section class="rp-kind" data-kind="rules" hidden>/, "other kinds wait behind their block");
-  assert.ok(!pane.replace(/<[^>]+>/g, " ").includes("~/"), "no path in the pane's text");
+  assert.ok(!pane.replace(/<p class="fv-cap">[^<]*<\/p>/g, "").replace(/<[^>]+>/g, " ").includes("~/"), "no path in the pane's text, but the caption of an opened preview");
   assert.match(pane, /data-goto="mac\/codex" data-goto-env="mac">去「按机器」里看</);
   assert.match(html, /<section class="m-agent" data-agent="grok-bot\/bot">/);
   assert.match(html, /<li data-agent="mac\/hermes">/);

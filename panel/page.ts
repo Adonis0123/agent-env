@@ -43,6 +43,7 @@ import {
   type AgentKind,
   agentKinds,
   sourcePath,
+  thisMachine,
   habitFix,
   relationGraph,
   relationLayout,
@@ -61,6 +62,7 @@ import {
 } from "./model.ts";
 import { aiFixText, aiLead, aiSentence, type AiStep, aiStepsText, aiStepText, readsOnly, type SentenceOptions } from "./ai-copy.ts";
 import { PLUGINS_CSS, PLUGINS_PRESET, pluginsFact, pluginsHtml, readPluginsView } from "./plugins-view.ts";
+import { fileRow, type FileSet, FILES_CSS, openTargets, requestGuard } from "./files.ts";
 import type { LoadFailure, LoadResult } from "./source.ts";
 
 export interface Ctx {
@@ -81,7 +83,17 @@ export interface Ctx {
   noManifest?: boolean;
   /** `AGENT_ENV_MANIFEST=<path>` to put before every bin/agent-env command, or "" (workFolders().env). */
   envPrefix?: string;
+  /** The home folder the server shows as `~`: a path under it can be looked at in the page (files.ts). */
+  home?: string;
+  /** The paths this render offers to show (files.ts fileSet); the route reads only these. */
+  files?: FileSet;
 }
+
+/** A command (or an internal name) as code: every whitespace-separated word in its own box (.tok), so a narrow line
+ *  breaks between words and never after a hyphen inside one. Words are joined by single spaces, which is also what a
+ *  selection by hand gives; the copy buttons carry the original text themselves. */
+export const codeHtml = (text: string) =>
+  `<code>${text.split(/\s+/).filter(Boolean).map((w) => `<span class="tok">${esc(w)}</span>`).join(" ")}</code>`;
 
 type Place = Pick<Ctx, "workdir" | "noManifest" | "envPrefix">;
 /** Where commands run on this machine, for ai-copy.ts. */
@@ -124,6 +136,9 @@ export const CSS = `
   .wrap { max-width: 1240px; margin: 0 auto; padding: 16px 24px 64px; }
   a:not([class]) { color: var(--kit-accent, #43721d); text-underline-offset: 3px; }
   code, pre { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; }
+  /* a word of a command (codeHtml): the line breaks between words, not after a hyphen inside one; a word wider
+     than the line still breaks */
+  .tok { display: inline-block; max-width: 100%; overflow-wrap: anywhere; }
   pre { margin: 8px 0; padding: 8px 12px; overflow-x: auto; background: var(--lt-code-bg, var(--kit-surface-muted, #f4f4f4)); color: var(--lt-code-fg, inherit); border-radius: 8px; white-space: pre-wrap; word-break: break-word; }
   h1, h2, h3, h4, p { margin: 0; }
   .muted { color: var(--kit-muted, #666); }
@@ -191,15 +206,17 @@ export const CSS = `
   /* a thing to do: the one row all three tabs use */
   .todo { display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "main acts" "more more"; gap: 0 16px; padding: 12px 0; border-bottom: 1px solid var(--kit-border, #ddd); }
   .todo-main { grid-area: main; min-width: 0; }
-  .todo-line { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 8px; }
-  .todo-title { font-size: 14px; font-weight: 600; line-height: 1.45; overflow-wrap: anywhere; }
+  .todo-line { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 8px; }
+  .todo-line > .who { position: relative; top: 3px; }
+  .todo-line > .who + .todo-title { flex: 1 1 12em; }
+  .todo-title { font-size: 14px; font-weight: 600; line-height: 1.45; overflow-wrap: break-word; }
   .todo-where { font-size: 12px; color: var(--kit-faint, #999); white-space: nowrap; }
   .todo-where .sep { margin: 0 4px; }
   .todo-impact { margin-top: 2px; max-width: 72ch; font-size: 13px; color: var(--kit-muted, #666); }
   .todo-acts { grid-area: acts; display: flex; align-items: center; gap: 4px; align-self: start; }
   .todo-more { grid-area: more; display: grid; gap: 8px; padding: 8px 0 4px; }
   .raw-line { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 8px; font-size: 12px; color: var(--kit-faint, #999); }
-  .raw-line code { color: var(--kit-muted, #666); overflow-wrap: anywhere; }
+  .raw-line code { color: var(--kit-muted, #666); overflow-wrap: break-word; }
   .more-acts { display: flex; flex-wrap: wrap; gap: 8px; }
   .steps { display: grid; margin: 0; padding: 0; list-style: none; counter-reset: step; }
   .step { display: grid; grid-template-columns: 24px minmax(0, 1fr); gap: 4px 8px; padding: 8px 0; counter-increment: step; scroll-margin: 80px; border-radius: 8px; }
@@ -209,7 +226,7 @@ export const CSS = `
   .step-who { font-size: 12px; font-weight: 600; color: var(--kit-muted, #666); }
   .confirm-note { font-size: 12px; color: var(--kit-warn, #a44d00); }
   .cmd { display: flex; align-items: center; gap: 8px; padding: 4px 4px 4px 10px; border-radius: 8px; background: var(--lt-code-bg, var(--kit-surface-muted, #f4f4f4)); }
-  .cmd code { flex: 1; min-width: 0; color: var(--lt-code-fg, inherit); word-break: break-all; }
+  .cmd code { flex: 1; min-width: 0; color: var(--lt-code-fg, inherit); overflow-wrap: break-word; }
 
   /* "by machine" tab: a heading per machine, then its agents' rows */
   .machine + .machine { margin-top: 32px; }
@@ -225,7 +242,7 @@ export const CSS = `
   .m-agent > .cells-line { padding: 4px 0 12px; border-bottom: 1px solid var(--kit-border, #ddd); }
   .disclose { display: flex; width: 100%; align-items: center; gap: 8px; min-height: 44px; padding: 8px 0; border: 0; border-bottom: 1px solid var(--kit-border, #ddd); background: none; color: var(--kit-text, inherit); font: inherit; text-align: left; cursor: pointer; }
   .disclose:hover .ok-names { color: var(--kit-text, inherit); }
-  .disclose .ok-names { color: var(--kit-muted, #666); font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; flex: 1; }
+  .disclose .ok-names { color: var(--kit-muted, #666); font-size: 13px; overflow-wrap: break-word; min-width: 0; flex: 1; }
   .chev { display: inline-block; width: 0; height: 0; margin-left: 2px; border-left: 4px solid currentColor; border-top: 4px solid transparent; border-bottom: 4px solid transparent; transition: var(--lt-transition, transform 150ms ease-out); }
   [aria-expanded="true"] > .chev { transform: rotate(90deg); }
   .ok-list { margin: 0; padding: 0; list-style: none; }
@@ -350,12 +367,11 @@ export const CSS = `
   .rp-kh { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 600; }
   .rp-src { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 4px; font-size: 12px; color: var(--kit-muted, #666); }
   .rp-src-name { color: var(--kit-text, inherit); text-decoration: underline dotted var(--kit-border-strong, #bbb); text-underline-offset: 3px; }
-  .rp-copy { margin-left: 8px; font-size: 12px; }
   .rp-bad { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
   .rp-bad > li { display: grid; gap: 4px; padding: 8px 12px; border-radius: 8px; background: var(--kit-surface-muted, #f4f4f4); }
   .rp-line { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; }
   .rp-name { font-weight: 500; overflow-wrap: anywhere; }
-  .rp-why, .rp-fix { font-size: 12px; color: var(--kit-muted, #666); overflow-wrap: anywhere; }
+  .rp-why, .rp-fix { font-size: 12px; color: var(--kit-muted, #666); overflow-wrap: break-word; }
   .rp-rest summary { display: flex; align-items: center; gap: 8px; min-height: 32px; font-size: 12px; color: var(--kit-muted, #666); cursor: pointer; list-style: none; }
   .rp-rest summary::-webkit-details-marker { display: none; }
   .rp-rest[open] > summary > .chev { transform: rotate(90deg); }
@@ -416,8 +432,8 @@ export const CSS = `
   .error h3 { margin-top: 12px; }
   .fix-line { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; font-size: 13px; }
   .fail-detail > span { margin-right: 8px; color: var(--kit-faint, #999); }
-  .fail-detail code { overflow-wrap: anywhere; }
-  .fix-line code { padding: 0 4px; border-radius: 4px; background: var(--kit-surface-muted, #f4f4f4); word-break: break-all; }
+  .fail-detail code { overflow-wrap: break-word; }
+  .fix-line code { padding: 0 4px; border-radius: 4px; background: var(--kit-surface-muted, #f4f4f4); overflow-wrap: break-word; }
   .loading { display: flex; align-items: center; gap: 12px; }
   .spinner { width: 16px; height: 16px; border-radius: 50%; border: 2px solid var(--kit-border, #ddd); border-top-color: var(--kit-accent, #43721d); animation: spin 0.8s linear infinite; }
   @keyframes spin { to { transform: rotate(360deg); } }
@@ -452,7 +468,7 @@ export const CSS = `
     .viewbar button::before { inset: -6px 0; }
   }
   @media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
-` + PLUGINS_CSS;
+` + PLUGINS_CSS + FILES_CSS;
 
 // ---- icons: one drawn set, 16 grid, 1.5 stroke ----
 
@@ -536,6 +552,8 @@ interface View {
   todos: Todo[];
   agents: Map<string, AgentRow>;
   multiEnv: boolean;
+  /** the machine the panel runs on (model.ts thisMachine): only its paths get the view and open buttons */
+  thisEnv: string | null;
 }
 
 /** A glossary word in the page's language; the key itself when the glossary has nothing for it. */
@@ -611,7 +629,7 @@ export function todoHtml(ctx: Ctx, v: View, t: Todo, key: string, opts: { where?
           // the dry-run wording only when an earlier step is a dry run; local delivery has none
           const afterDryRun = t.steps.slice(0, i).some((x) => x.command?.includes("--dry-run"));
           const confirm = s.confirm ? `<span class="confirm-note">${esc(afterDryRun ? tr("look at the dry run, then confirm") : tr("Run it only after you confirm"))}</span>` : "";
-          const cmd = s.command ? `<div class="cmd"><code>${esc(s.command)}</code>${copyButton(ctx, aiStepText(ctx.lang, title, aiSteps, i, place), { quiet: false, label: tr("Copy this step for AI") })}</div>` : "";
+          const cmd = s.command ? `<div class="cmd">${codeHtml(s.command)}${copyButton(ctx, aiStepText(ctx.lang, title, aiSteps, i, place), { quiet: false, label: tr("Copy this step for AI") })}</div>` : "";
           return `<li class="step${s.confirm ? " is-confirm" : ""}" id="${key}-s${i}"><div class="step-body"><p class="step-text"><span class="step-who">${esc(whoText)}</span><span>${esc(text)}</span>${confirm}</p>${cmd}</div></li>`;
         })
         .join("")}</ol>`
@@ -619,7 +637,7 @@ export function todoHtml(ctx: Ctx, v: View, t: Todo, key: string, opts: { where?
   // the portal's AI task stays one click away when the main button copies; without the portal both would copy
   const rest = [acts.aiInMore && ctx.askBridge ? aiButton(ctx, v, t, acts.ai, true) : ""].filter(Boolean);
   const raw = [t.ref.kind, t.ref.name || t.ref.case, t.state].filter(Boolean).join(" · ");
-  const rawLine = raw ? `<p class="raw-line"><span>${esc(tr("Internal name, for your AI"))}</span><code>${esc(raw)}</code></p>` : "";
+  const rawLine = raw ? `<p class="raw-line"><span>${esc(tr("Internal name, for your AI"))}</span>${codeHtml(raw)}</p>` : "";
   const folded = `<div class="todo-more" id="${key}" hidden>${steps}${rest.length ? `<div class="more-acts">${rest.join("")}</div>` : ""}${rawLine}</div>`;
   return `<article class="todo" data-todo="${esc(t.id)}" data-actor="${t.actor}">${main}<div class="todo-acts">${primary}${more}</div>${folded}</article>`;
 }
@@ -922,16 +940,17 @@ function relCells(ctx: Ctx, v: View, a: RelNode, live: boolean): string {
     .join("");
 }
 
-/** "from Shared rules" once per kind; each source's path in its hover text, and one "copy path" button. */
-function originLine(ctx: Ctx, g: RelationGraph, env: string, origins: string[]): string {
+/** "from Shared rules" once per kind; each source's path in its hover text, and under the line one row per path:
+ *  copy it, and on this machine look at it or open it (files.ts fileRow). */
+function originLine(ctx: Ctx, v: View, g: RelationGraph, env: string, origins: string[]): string {
   if (!origins.length) return "";
-  const paths = origins.map((o) => sourcePath(g, o, env)).filter(Boolean);
+  const withPath = origins.map((o) => ({ o, p: sourcePath(g, o, env) })).filter((x) => x.p);
   const names = origins.map((o) => {
     const p = sourcePath(g, o, env);
     return p ? `<span class="rp-src-name" tabindex="0" data-tip="${esc(p)}">${esc(sourceWord(ctx, o))}</span>` : esc(sourceWord(ctx, o));
   });
-  const copy = paths.length ? `<button type="button" class="linkish rp-copy" data-copy="${esc(paths.join("\n"))}">${esc(paths.length === 1 ? ctx.t("Copy path") : ctx.t("Copy {n} paths", { n: paths.length }))}</button>` : "";
-  return `<p class="rp-src">${esc(ctx.t("from {list}", { list: "" }))}${names.join(ctx.lang === "zh" ? "、" : ", ")}${copy}</p>`;
+  const rows = withPath.map((x) => fileRow({ t: ctx.t, esc, home: ctx.home, files: ctx.files }, x.p, env === v.thisEnv, withPath.length > 1 ? sourceWord(ctx, x.o) : "")).join("");
+  return `<p class="rp-src">${esc(ctx.t("from {list}", { list: "" }))}${names.join(ctx.lang === "zh" ? "、" : ", ")}</p>${rows}`;
 }
 
 /** A fix: one copyable line per command (writes and confirmations stay in the Inbox's steps), or the sentence. */
@@ -942,11 +961,11 @@ function fixHtml(ctx: Ctx, fix: string, what = ""): string {
   // the fix is exactly one command: a sentence with that command, careful unless it only reads
   if (f.commands.length === 1 && f.commands[0] === fix.trim()) {
     const c = f.commands[0];
-    return `<div class="cmd"><code>${esc(c)}</code>${aiCopyButton(ctx, ctx.t("handle this problem: {what}", { what: what || fix }), [c], { careful: f.confirm || !readsOnly(c), quiet: false })}</div>${confirm}`;
+    return `<div class="cmd">${codeHtml(c)}${aiCopyButton(ctx, ctx.t("handle this problem: {what}", { what: what || fix }), [c], { careful: f.confirm || !readsOnly(c), quiet: false })}</div>${confirm}`;
   }
   // a sentence (it may name several commands whose order matters): the commands show as before, as code, and one
   // button copies the whole fix, so no command is handed out apart from the ones before it
-  const cmds = f.commands.map((c) => `<div class="cmd"><code>${esc(c)}</code></div>`).join("");
+  const cmds = f.commands.map((c) => `<div class="cmd">${codeHtml(c)}</div>`).join("");
   const text = f.text ? `<p class="rp-fix">${esc(f.text)}</p>` : "";
   return `${text}${cmds}<div class="rp-fix-copy">${copyButton(ctx, aiFixText(ctx.lang, what || fix, fix, whereOf(ctx)), { quiet: false })}</div>${confirm}`;
 }
@@ -969,7 +988,7 @@ function kindSection(ctx: Ctx, v: View, g: RelationGraph, a: RelNode, k: AgentKi
   const ai = k.problems.length ? cellAi(ctx, v, a.env, a.id, k.kind, false) : "";
   if (ai) bad += `<div class="rp-acts">${ai}</div>`;
   const head = opts.heading ? `<h4 class="rp-kh">${mark(k.state, word(ctx, v, k.kind))}</h4>` : "";
-  return `<section class="rp-kind" data-kind="${k.kind}"${opts.hidden ? " hidden" : ""}>${head}${originLine(ctx, g, a.env, k.origins)}${bad}${rest}</section>`;
+  return `<section class="rp-kind" data-kind="${k.kind}"${opts.hidden ? " hidden" : ""}>${head}${originLine(ctx, v, g, a.env, k.origins)}${bad}${rest}</section>`;
 }
 
 /** Details of one agent. "tabs": one block per kind on top, one kind open below (the side pane); "flat": every kind
@@ -1016,9 +1035,14 @@ function relPane(ctx: Ctx, v: View, all: AllStatus, g: RelationGraph, n: RelNode
   if (n.col === "source") {
     const reach = g.agents.filter((a) => a.on.includes(n.key));
     const envs = [...new Set(reach.map((a) => a.env))];
-    const paths = [...new Set(envs.map((e) => sourcePath(g, n.id, e)).filter(Boolean))];
-    const copy = paths.length ? `<button type="button" class="linkish rp-copy" data-copy="${esc(paths.join("\n"))}" data-tip="${esc(paths.join("\n"))}">${esc(paths.length === 1 ? t("Copy path") : t("Copy {n} paths", { n: paths.length }))}</button>` : "";
-    body = `<header class="rp-head"><h3>${esc(sourceWord(ctx, n.id))}</h3><p class="rp-meta">${esc(sourceExplain(ctx, n.id))}</p>${copy ? `<p class="rp-meta">${copy}</p>` : ""}</header><h4 class="rp-sub">${esc(t("Reaches {n} agents", { n: reach.length }))}</h4><ul class="rp-rows">${reach.map(agentRow).join("")}</ul>`;
+    // one row per path; a path is this machine's when this machine is among the ones that see it there
+    const paths = new Map<string, boolean>();
+    for (const e of envs) {
+      const p = sourcePath(g, n.id, e);
+      if (p) paths.set(p, (paths.get(p) ?? false) || e === v.thisEnv);
+    }
+    const copy = [...paths].map(([p, local]) => fileRow({ t, esc, home: ctx.home, files: ctx.files }, p, local)).join("");
+    body = `<header class="rp-head"><h3>${esc(sourceWord(ctx, n.id))}</h3><p class="rp-meta">${esc(sourceExplain(ctx, n.id))}</p>${copy}</header><h4 class="rp-sub">${esc(t("Reaches {n} agents", { n: reach.length }))}</h4><ul class="rp-rows">${reach.map(agentRow).join("")}</ul>`;
   } else if (n.col === "env") {
     body = `<header class="rp-head"><h3>${esc(n.label)}</h3><p class="rp-meta">${esc(envReport(ctx, all, n)[1])}</p></header><ul class="rp-rows">${g.agents.filter((a) => a.env === n.id).map(agentRow).join("")}</ul>`;
   } else {
@@ -1126,7 +1150,7 @@ function pluginsTab(ctx: Ctx, all: AllStatus): string {
   const ai = data.kind !== "ok" ? "" : ctx.askBridge
     ? `<button type="button" class="lt-btn lt-btn-sm" data-ask="${PLUGINS_PRESET}" data-fact="fact-plugins" data-tip="${esc(t("Hands it to AI: it changes which plugins each environment gets, within what each environment allows, and shows you the change first"))}">${esc(t("Let AI adjust plugins"))}</button>`
     : `<button type="button" class="lt-btn lt-btn-sm" data-copy-from="fact-plugins" data-copy-lead="${esc(aiLead(ctx.lang, PLUGINS_PRESET, { ...whereOf(ctx), manifest: ctx.manifest }))}" data-ai-copy data-tip="${esc(t("Copies the request and the current plugin setup, written for an AI. Paste it to your AI and say what to change"))}">${esc(t("Copy plugin change request for AI"))}</button>`;
-  const html = pluginsHtml({ t, lang: ctx.lang, esc, mark, when: (iso) => whenText(ctx, iso), aiButton: ai, aiCopy: (what, commands, o) => aiCopyButton(ctx, what, commands, o), aiFix: (problem, fix) => copyButton(ctx, aiFixText(ctx.lang, problem, fix, whereOf(ctx))) }, data);
+  const html = pluginsHtml({ t, lang: ctx.lang, esc, mark, when: (iso) => whenText(ctx, iso), aiButton: ai, aiCopy: (what, commands, o) => aiCopyButton(ctx, what, commands, o), aiFix: (problem, fix) => copyButton(ctx, aiFixText(ctx.lang, problem, fix, whereOf(ctx))), code: codeHtml, file: (path) => fileRow({ t, esc, home: ctx.home, files: ctx.files }, path, thisMachine(all) !== null) }, data);
   return html + (fact ? `<textarea id="fact-plugins" hidden readonly>${esc(fact)}</textarea>` : "");
 }
 
@@ -1143,7 +1167,7 @@ export function tabsHtml(ctx: Ctx, all: AllStatus, preview?: string): string {
   const agents = new Map<string, AgentRow>();
   for (const c of cards) for (const r of [...c.problem.map((p) => p.row), ...c.ok]) agents.set(`${c.env}|${r.id}`, r);
   const facts = new Map(todos.map((x, i) => [x.id, `fact-${i}`]));
-  const v: View = { g: glossary, facts, todos, agents, multiEnv: cards.length > 1 };
+  const v: View = { g: glossary, facts, todos, agents, multiEnv: cards.length > 1, thisEnv: thisMachine(all) };
   const panels: Record<string, string> = { inbox: inboxHtml(ctx, v, todos, all), machines: machinesHtml(ctx, v, cards, todos), matrix: matrixHtml(ctx, v, groups, counts), relation: relationHtml(ctx, v, all), plugins: pluginsTab(ctx, all) };
   const tabs = Object.keys(panels)
     .map((id, i) => `<button type="button" class="lt-tab" role="tab" id="tab-${id}" aria-controls="panel-${id}" aria-selected="${i === 0}" tabindex="${i === 0 ? 0 : -1}" data-tab="${id}">${tabName(esc(t(TAB_TITLE[id])))}${id === "inbox" && todos.length ? `&nbsp;<span class="inbox-count num">${todos.length}</span>` : ""}</button>`)
@@ -1181,12 +1205,12 @@ export function failureHtml(ctx: Ctx, f: LoadFailure): string {
   const { t } = ctx;
   const output = f.output.length ? `<h3>${esc(t("Error text (first lines, for your AI)"))}</h3><pre>${esc(f.output.join("\n"))}</pre>` : "";
   return `<div class="empty error" role="alert" data-failure="${esc(f.kind)}"><p><strong>${esc(t("Could not load the status"))}</strong></p>
-<p class="fail-detail"><span>${esc(t("Details, for your AI"))}</span><code>${esc(f.command)}</code>: ${esc(f.message)}</p>${output}
-<h3>${esc(t("What to do"))}</h3><p>${esc(t(FAILURE_HINT[f.kind]))}</p><div class="fix-line">${aiCopyButton(ctx, t("find out why the Environments panel cannot load its status, and fix it. The panel says: {message}", { message: `${f.command}: ${f.message}` }), FAILURE_RUNS[f.kind] ? [f.fix] : [], { quiet: false, careful: true })}<code>${esc(f.fix)}</code></div>${noManifestHtml(ctx, "p")}</div>`;
+<p class="fail-detail"><span>${esc(t("Details, for your AI"))}</span>${codeHtml(f.command)}: ${esc(f.message)}</p>${output}
+<h3>${esc(t("What to do"))}</h3><p>${esc(t(FAILURE_HINT[f.kind]))}</p><div class="fix-line">${aiCopyButton(ctx, t("find out why the Environments panel cannot load its status, and fix it. The panel says: {message}", { message: `${f.command}: ${f.message}` }), FAILURE_RUNS[f.kind] ? [f.fix] : [], { quiet: false, careful: true })}${codeHtml(f.fix)}</div>${noManifestHtml(ctx, "p")}</div>`;
 }
 
 export function emptyHtml(ctx: Ctx): string {
-  return `<div class="empty" role="status"><p><strong>${esc(ctx.t("No environments yet"))}</strong></p><p>${esc(ctx.t("No machine has been checked yet, so there is nothing to show. Copy the sentence below to your AI; it runs the first check on this machine. Then press Refresh."))}</p><div class="fix-line">${aiCopyButton(ctx, ctx.t(STATUS_ASK), [STATUS_COMMAND], { quiet: false })}<code>${STATUS_COMMAND}</code></div></div>`;
+  return `<div class="empty" role="status"><p><strong>${esc(ctx.t("No environments yet"))}</strong></p><p>${esc(ctx.t("No machine has been checked yet, so there is nothing to show. Copy the sentence below to your AI; it runs the first check on this machine. Then press Refresh."))}</p><div class="fix-line">${aiCopyButton(ctx, ctx.t(STATUS_ASK), [STATUS_COMMAND], { quiet: false })}${codeHtml(STATUS_COMMAND)}</div></div>`;
 }
 
 /** The body of the page for one load: header line, status sentence, three tabs; or the empty or error state. */
@@ -1208,6 +1232,13 @@ function pageScript(cfg: { base: string; top: string; strings: Record<string, st
   const writeRelFn = (window as unknown as { __writeRel: (s: unknown, v: string) => boolean }).__writeRel;
   // model.ts scrollHold, embedded the same way
   const scrollHoldFn = (window as unknown as { __scrollHold: (y: number, windowHeight: number, pageHeight: number) => number }).__scrollHold;
+  // files.ts openTargets, embedded the same way
+  const openTargetsFn = (window as unknown as { __openTargets: (get: typeof fetch) => Promise<boolean> }).__openTargets;
+  // this script's own nonce: the portal's shared script is loaded with it, so the page's CSP stays as it is
+  // files.ts requestGuard: one per open preview, so an older answer never replaces a newer one
+  const requestGuardFn = (window as unknown as { __requestGuard: () => { begin: () => number; current: (n: number) => boolean; cancel: () => void } }).__requestGuard;
+  const guards = new WeakMap<HTMLElement, ReturnType<typeof requestGuardFn>>();
+  const nonce = (document.currentScript as HTMLScriptElement | null)?.nonce ?? "";
   let store: Storage | null = null;
   try {
     store = window.localStorage;
@@ -1242,6 +1273,97 @@ function pageScript(cfg: { base: string; top: string; strings: Record<string, st
     };
     if (navigator.clipboard?.writeText) navigator.clipboard.writeText(text).then(() => done(true), fallback);
     else fallback();
+  }
+
+  /** 「查看内容」: the file's text (or a folder's entries) under its row, as plain text; a second click closes it. */
+  async function viewFile(btn: HTMLElement) {
+    const body = btn.closest("[data-fv]")?.querySelector<HTMLElement>(".fv-body");
+    const state = body?.querySelector<HTMLElement>(".fv-state");
+    const text = body?.querySelector<HTMLElement>(".fv-text");
+    const intro = body?.querySelector<HTMLElement>(".fv-intro");
+    if (!body || !state || !text) return;
+    const open = body.hidden;
+    body.hidden = !open;
+    btn.setAttribute("aria-expanded", String(open));
+    btn.textContent = open ? S.fileHide : btn.dataset.folder !== undefined ? S.folderView : S.fileView;
+    const guard = guards.get(body) ?? requestGuardFn();
+    guards.set(body, guard);
+    // closed: an answer still on its way is for nobody
+    if (!open) return guard.cancel();
+    const mine = guard.begin();
+    const say = (msg: string) => {
+      state.textContent = msg;
+      state.hidden = !msg;
+    };
+    const show = (value: string) => {
+      text.textContent = value;
+      text.hidden = !value;
+    };
+    show("");
+    if (intro) intro.hidden = true;
+    say(S.fileLoading);
+    type Answer = { state?: string; text?: string; cut?: boolean; more?: boolean; entries?: string[]; total?: number };
+    let r: Answer = {};
+    try {
+      const res = await fetch(`${cfg.base}/api/file?id=${encodeURIComponent(btn.dataset.view ?? "")}`, { cache: "no-store" });
+      r = ((await res.json()) ?? {}) as Answer;
+    } catch {
+      r = {};
+    }
+    // closed or opened again meanwhile: the newer click's answer is the one to show
+    if (!guard.current(mine)) return;
+    if (r.state === "text" && typeof r.text === "string") {
+      show(r.text);
+      say(r.cut ? S.fileCut : r.text ? "" : S.fileEmpty);
+    } else if (r.state === "folder" && Array.isArray(r.entries)) {
+      show(r.entries.join("\n"));
+      if (intro) intro.hidden = !r.entries.length;
+      const n = String(r.entries.length);
+      say(r.more ? S.folderMore.replace("{n}", n) : r.cut ? S.folderCut.replace("{n}", n).replace("{total}", String(r.total ?? "")) : r.entries.length ? "" : S.folderEmpty);
+    } else say(r.state === "gone" ? S.fileGone : r.state === "binary" ? S.fileBinary : r.state === "stale" ? S.fileStale : S.fileError);
+  }
+
+  // "Open in": the portal's shared control (/_shared/open.js), only when its API answers on this origin. The panel
+  // run on its own, or an older portal, has none: the slots stay hidden and nothing is said.
+  type Opener = { html?: (o: { path: string; name?: string }) => string; refresh?: () => unknown; ready?: unknown };
+  let opener: Promise<Opener | null> | null = null;
+  function openControl(): Promise<Opener | null> {
+    opener ??= openTargetsFn(fetch.bind(window)).then((yes) => {
+      if (!yes) return null;
+      return new Promise<Opener | null>((done) => {
+        const el = document.createElement("script");
+        el.src = "/_shared/open.js";
+        el.nonce = nonce;
+        el.onload = () => {
+          const o = (window as unknown as { LocalToolsOpen?: Opener }).LocalToolsOpen;
+          const ok = o && typeof o.html === "function" ? o : null;
+          const ready = ok?.ready;
+          if (ready && typeof (ready as PromiseLike<unknown>).then === "function") (ready as PromiseLike<unknown>).then(() => done(ok), () => done(ok));
+          else done(ok);
+        };
+        el.onerror = () => done(null);
+        document.head.appendChild(el);
+      });
+    }).catch(() => null);
+    return opener;
+  }
+  /** Puts the shared split button into every path row that waits for it (after each load of the content). */
+  function fillOpen() {
+    if (!content.querySelector("[data-open-path]")) return;
+    void openControl().then((o) => {
+      if (!o?.html) return;
+      try {
+        content.querySelectorAll<HTMLElement>("[data-open-path]").forEach((slot) => {
+          if (slot.dataset.filled !== undefined) return;
+          slot.innerHTML = o.html!({ path: slot.dataset.openPath ?? "", name: slot.dataset.openName });
+          slot.dataset.filled = "";
+          slot.hidden = false;
+        });
+        if (typeof o.refresh === "function") o.refresh();
+      } catch {
+        content.querySelectorAll<HTMLElement>("[data-open-path]").forEach((slot) => (slot.hidden = true));
+      }
+    });
   }
 
   function toggle(key: string, force?: boolean) {
@@ -1445,7 +1567,7 @@ function pageScript(cfg: { base: string; top: string; strings: Record<string, st
     const target = e.target as HTMLElement;
     // a click on the drawer's backdrop closes it
     if (target instanceof HTMLDialogElement) return target.close();
-    const el = target.closest<HTMLElement>("[data-tab],[data-copy],[data-copy-from],[data-ask],[data-ask-all],[data-toggle],[data-refresh],[data-filter],[data-gloss],[data-close],[data-rel-filter],[data-goto],[data-focus]");
+    const el = target.closest<HTMLElement>("[data-tab],[data-copy],[data-view],[data-copy-from],[data-ask],[data-ask-all],[data-toggle],[data-refresh],[data-filter],[data-gloss],[data-close],[data-rel-filter],[data-goto],[data-focus]");
     if (!el && target.closest(".rel-graph") && relPinned) return relPin(null);
     if (!el) return;
     hideTip();
@@ -1472,6 +1594,7 @@ function pageScript(cfg: { base: string; top: string; strings: Record<string, st
     }
     if (el.dataset.refresh !== undefined) return void load();
     if (el.dataset.copy !== undefined) return copy(el.dataset.copy, el);
+    if (el.dataset.view !== undefined) return void viewFile(el);
     if (el.dataset.copyFrom) {
       const value = (document.getElementById(el.dataset.copyFrom) as HTMLTextAreaElement | null)?.value ?? "";
       return copy(el.dataset.copyLead ? el.dataset.copyLead + "\n" + value : value, el);
@@ -1534,6 +1657,7 @@ function pageScript(cfg: { base: string; top: string; strings: Record<string, st
       relLit = null;
       relFilter(readRelFn(store));
       for (const id of open) toggle(id, true);
+      fillOpen();
       if (refresh) window.scrollTo(scroll.x, scroll.y);
     } catch (err) {
       if (refresh) {
@@ -1568,9 +1692,22 @@ export function layout(o: { ctx: Ctx; nonce: string; scheme: string; headerBar: 
     copied: t("Copied"),
     copyFailed: t("Copy failed: select the text and copy it yourself"),
     factLabel: lang === "zh" ? "要处理的问题" : "Problem to fix",
+    fileView: t("View"),
+    folderView: t("View folder"),
+    fileHide: t("Hide"),
+    fileStale: t("This page is out of date. Refresh it and try again."),
+    fileLoading: t("Reading…"),
+    fileGone: t("This file no longer exists"),
+    fileCut: t("This file is large: only the first 256 KB are shown, the rest was cut"),
+    fileBinary: t("This is not a text file, so it cannot be shown here"),
+    fileError: t("This file could not be read"),
+    fileEmpty: t("This file is empty"),
+    folderEmpty: t("This folder is empty"),
+    folderCut: t("This folder has {total} entries: only the first {n} are shown"),
+    folderMore: t("This folder has more than 2000 entries: only {n} of them are shown"),
   };
   const cfg = { base, top: topHtml(ctx), strings };
-  const helpers = `window.__readTab=${readTab.toString()};window.__writeTab=${writeTab.toString()};window.__readRel=${readRelFilter.toString()};window.__writeRel=${writeRelFilter.toString()};window.__scrollHold=${scrollHold.toString()};`;
+  const helpers = `window.__readTab=${readTab.toString()};window.__writeTab=${writeTab.toString()};window.__readRel=${readRelFilter.toString()};window.__writeRel=${writeRelFilter.toString()};window.__scrollHold=${scrollHold.toString()};window.__openTargets=${openTargets.toString()};window.__requestGuard=${requestGuard.toString()};`;
   return `<!DOCTYPE html>
 <html lang="${lang === "zh" ? "zh-CN" : "en"}" data-lt-theme="${esc(o.scheme)}">
 <head>

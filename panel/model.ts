@@ -1092,6 +1092,12 @@ export function relationGraph(all: AllStatus, now: number): RelationGraph {
   return { sources, idle, envs, agents, links: [...links.values()], hasSources, paths: { ...(rel?.sources ?? {}) }, envPaths: rel?.env_sources ?? {}, problemCells };
 }
 
+/** The machine the panel runs on: the environment this very run checked itself (a cloud-hosted one checked from here
+ *  is still another machine). null when the status has none, as with a report read from a branch. */
+export function thisMachine(all: Pick<AllStatus, "environments">): string | null {
+  return all.environments.find((e) => e.source === "live" && !e.checked_from)?.env ?? null;
+}
+
 /** The path of a source as one machine sees it: that machine's own path when the report has one, else the shared one. */
 export function sourcePath(g: Pick<RelationGraph, "paths" | "envPaths">, origin: string, env: string): string {
   return g.envPaths[env]?.[origin] ?? g.paths[origin] ?? "";

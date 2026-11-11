@@ -23,8 +23,8 @@ test("copy for AI: a command that is not read-only asks to be shown first; a rea
   for (const c of ["bin/agent-env render --target mac/codex --write", "bin/agent-env mcp --fix", "bin/agent-env mcp sync --target mac/hermes", "bin/agent-env status --commit --push", "bin/agent-env plugin publish --all", "bin/agent-env plugin build --all", "bin/agent-env plugin pointer --target grok-bot/bot", "bin/agent-env plugin pointer --target grok-bot/bot --record", "bin/agent-env deliver --target a/b --yes", "git pull"]) assert.equal(readsOnly(c), false, c);
   // the clause comes from the command, with no flag from the caller
   assert.equal(
-    aiSentence("zh", "处理这个问题：Codex · delete-guard（漂移）", ["bin/agent-env render --target mac/codex --write"], { dir: DIR }),
-    "帮我处理这个问题：Codex · delete-guard（漂移）（在 ~/agent-home 目录里运行 bin/agent-env render --target mac/codex --write）。会改动或上传东西的步骤，先给我看，等我同意再做。",
+    aiSentence("zh", "处理这个问题：Codex · delete-guard（不一致）", ["bin/agent-env render --target mac/codex --write"], { dir: DIR }),
+    "帮我处理这个问题：Codex · delete-guard（不一致）（在 ~/agent-home 目录里运行 bin/agent-env render --target mac/codex --write）。会改动或上传东西的步骤，先给我看，等我同意再做。",
   );
   assert.equal(
     aiSentence("en", "handle this problem: figma is off", ["bin/agent-env mcp --fix"], { dir: DIR }),

@@ -143,7 +143,7 @@ test("v5: issues and glossary are read as given; bad actors and tasks are made s
   const all = fixture("v5-issues");
   assert.equal(all.issues!.length, 5);
   assert.deepEqual(all.issues!.map((i) => i.actor), ["other_env", "user", "user", "ai", "notice"]);
-  assert.equal(all.glossary!.drift.label_zh, "漂移");
+  assert.equal(all.glossary!.drift.label_zh, "不一致");
   const odd = parseAllStatus({ schema: 1, environments: [], issues: [{ id: "x", target: "mac/a", actor: "boss", ai_task: "rm", steps: [{ who: "x", text_zh: "t", command: "c", confirm: "yes" }] }] });
   assert.deepEqual([odd.issues![0].actor, odd.issues![0].ai_task, odd.issues![0].env, odd.issues![0].steps[0].who, odd.issues![0].steps[0].confirm], ["notice", null, "mac", "user", false]);
   assert.equal(fixture("drift").issues, undefined, "an older report has no issues");
@@ -232,14 +232,14 @@ test("a report without issues: one \"update this machine's engine\" item, nothin
   assert.ok(todoList(fixture("v5-issues")).every((t) => t.source === "engine"), "the engine's issues are used as given");
 });
 
-test("glossary: the report's entries over the panel's one copy; drift is 漂移 either way; prefixed keys found", () => {
+test("glossary: the report's entries over the panel's one copy; drift is 不一致 either way; prefixed keys found", () => {
   const g = glossaryOf(fixture("v5-issues"));
-  assert.equal(g.drift.label_zh, "漂移");
+  assert.equal(g.drift.label_zh, "不一致");
   assert.equal(g.drift.label_en, undefined, "the report's entry replaces the built-in one whole");
   const builtin = glossaryOf(fixture("drift"));
   assert.equal(fixture("drift").glossary, undefined);
-  assert.deepEqual([builtin.drift.label_zh, builtin.drift.label_en], ["漂移", "Drift"]);
-  assert.equal(glossaryOf({ glossary: { other: { label_zh: "x", explain_zh: "" } } }).drift.label_zh, "漂移", "a key the report leaves out comes from the panel's copy");
+  assert.deepEqual([builtin.drift.label_zh, builtin.drift.label_en], ["不一致", "Drift"]);
+  assert.equal(glossaryOf({ glossary: { other: { label_zh: "x", explain_zh: "" } } }).drift.label_zh, "不一致", "a key the report leaves out comes from the panel's copy");
   assert.equal(gloss({ "state.drift": { label_zh: "x", explain_zh: "" } }, "drift")!.label_zh, "x");
   assert.equal(gloss({}, "drift"), null);
 });

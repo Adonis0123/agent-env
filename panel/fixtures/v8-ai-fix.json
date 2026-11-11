@@ -103,7 +103,7 @@
           "state": "changed",
           "actor": "ai",
           "title_zh": "Claude Code 升级到了 2.1.322（清单登记的是 2.1.319）",
-          "impact_zh": "新版本可能改了规则的加载方式，分类表要重新核对",
+          "impact_zh": "新版本可能改了规则的加载方式，要让 AI 重新核对一遍",
           "steps": [
             {
               "who": "ai",
@@ -151,7 +151,7 @@
           "state": "changed",
           "actor": "ai",
           "title_zh": "Pi 升级到了 1.5.1（清单登记的是 1.5.0）",
-          "impact_zh": "新版本可能改了规则的加载方式，分类表要重新核对",
+          "impact_zh": "新版本可能改了规则的加载方式，要让 AI 重新核对一遍",
           "steps": [
             {
               "who": "ai",
@@ -537,7 +537,7 @@
       "state": "changed",
       "actor": "ai",
       "title_zh": "Claude Code 升级到了 2.1.322（清单登记的是 2.1.319）",
-      "impact_zh": "新版本可能改了规则的加载方式，分类表要重新核对",
+      "impact_zh": "新版本可能改了规则的加载方式，要让 AI 重新核对一遍",
       "steps": [
         {
           "who": "ai",
@@ -585,7 +585,7 @@
       "state": "changed",
       "actor": "ai",
       "title_zh": "Pi 升级到了 1.5.1（清单登记的是 1.5.0）",
-      "impact_zh": "新版本可能改了规则的加载方式，分类表要重新核对",
+      "impact_zh": "新版本可能改了规则的加载方式，要让 AI 重新核对一遍",
       "steps": [
         {
           "who": "ai",
@@ -636,7 +636,7 @@
       "explain_zh": "按这台机器或这个 agent 的需要有意改过，是预期内的"
     },
     "drift": {
-      "label_zh": "漂移",
+      "label_zh": "不一致",
       "explain_zh": "和清单期望的不一样，要修"
     },
     "missing": {
@@ -681,7 +681,7 @@
     },
     "pass": {
       "label_zh": "通过",
-      "explain_zh": "这次抽测 agent 守住了规则"
+      "explain_zh": "这次规则测试里 agent 守住了规则"
     },
     "fail": {
       "label_zh": "没过",
@@ -689,11 +689,11 @@
     },
     "err": {
       "label_zh": "出错",
-      "explain_zh": "抽测工具自己出错，这次没测到，结论未核实"
+      "explain_zh": "规则测试工具自己出错，这次没测到，结论未核实"
     },
     "skip": {
       "label_zh": "跳过",
-      "explain_zh": "这个用例不适用，或这个 agent 没法抽测"
+      "explain_zh": "这个用例不适用，或这个 agent 没法做规则测试"
     },
     "safety": {
       "label_zh": "安全层",

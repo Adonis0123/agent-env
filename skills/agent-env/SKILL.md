@@ -22,6 +22,14 @@ description: Runbook for the agent habit engine (agent-env) on Mac, WSL or a rem
 
 第一次安装（还没有清单）：按引擎 `README.md` 的「Use it for your setup」，从 `profiles/_template/starter/` 复制出个人层，再回到上表。
 
+面板给用户看的词和引擎内部叫法不同，看到页面用词时按下表对应：
+
+| 面板用词 | 引擎术语 |
+| --- | --- |
+| 规则测试 | eval（`bin/agent-env eval`） |
+| 不一致 | drift |
+| 本机自动生成 | composed |
+
 ## 1. 例行流程：sync → doctor → (eval) → status --commit
 
 按顺序做，每步看结果再决定下一步。

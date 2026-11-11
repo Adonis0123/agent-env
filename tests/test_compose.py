@@ -289,7 +289,7 @@ class IssueTests(unittest.TestCase):
         self.assertEqual([s["command"] for s in found["steps"]],
                          ["bin/agent-env render --target mac/claude-code --check",
                           "bin/agent-env render --target mac/claude-code --write", "bin/agent-env doctor"])
-        self.assertIn("和插件合成的不一致", found["title_zh"])
+        self.assertIn("和应该生成的内容不一致", found["title_zh"])
 
     def test_an_environment_with_its_own_sync_syncs_again(self):
         envs = dict(ISSUE_MANIFEST["environments"], wsl={"platform": "linux", "sync_command": "env-sync run"})

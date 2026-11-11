@@ -20,9 +20,16 @@ All notable changes to this project are listed here. Versions follow [Semantic V
 - Panel: every copy button copies a plain sentence for an AI agent ("Copy for AI") instead of a command: what to
   do, on which machine and in which folder, the command, and a request to show writes first. Multi-step items are
   numbered, and each step has its own "Copy this step for AI".
+- Panel: "查看内容" / "View" next to a listed file or folder on the 关系图 and 插件 tabs shows it read-only in the
+  page (this machine only, at most 256 KB, never paths that look like keys or passwords). When the hosting portal
+  offers its shared "Open in" control, that button appears next to it.
 
 ### Changed
 
+- Panel wording in Chinese: 漂移 is now 不一致, 抽测 is 规则测试, 本机按插件合成 is 本机自动生成; `skills/agent-env/SKILL.md`
+  maps the page words to the engine terms.
+- Panel at phone width: commands wrap between words and never after a hyphen, status icons stay on the line of
+  their title, and the list of healthy agents wraps instead of being cut.
 - The pointer rule now tells a cloud-hosted bot how to get third-party skills: run `npx -y skills experimental_install`
   in a plugin that has `skills-lock.json` and read `.agents/skills/`, or fetch each skill from its `sourceUrl` and
   `skillPath` with git. The default pointer limit is 400 characters (was 300).

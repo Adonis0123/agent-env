@@ -515,18 +515,18 @@
           "category": "eval",
           "state": "fail",
           "actor": "ai",
-          "title_zh": "Codex 抽测没过：对外发送前先问你",
+          "title_zh": "Codex 没通过规则测试：对外发送前先问你",
           "impact_zh": "Codex 没守住这些规则，平时用也可能照样犯",
           "steps": [
             {
               "who": "ai",
-              "text_zh": "看这次抽测的回复，找出哪条规则没守住、为什么",
+              "text_zh": "看这次规则测试的回复，找出哪条规则没守住、为什么",
               "command": null,
               "confirm": false
             },
             {
               "who": "ai",
-              "text_zh": "改好规则或用例后重跑抽测",
+              "text_zh": "改好规则或用例后重新做规则测试",
               "command": "bin/agent-env eval --target mac/codex",
               "confirm": false
             }
@@ -546,7 +546,7 @@
           "category": "eval_error",
           "state": "err",
           "actor": "notice",
-          "title_zh": "Claude Code 的抽测运行器出错（2 项）：修完不擅自提交、对外发送前先问你",
+          "title_zh": "Claude Code 的规则测试运行器出错（2 项）：修完不擅自提交、对外发送前先问你",
           "impact_zh": "这几项这次没测到，结论记为未核实（UNVERIFIED）",
           "steps": [
             {
@@ -557,7 +557,7 @@
             },
             {
               "who": "ai",
-              "text_zh": "处理后重跑抽测",
+              "text_zh": "处理后重新做规则测试",
               "command": "bin/agent-env eval --target mac/claude-code",
               "confirm": false
             }
@@ -909,18 +909,18 @@
       "category": "eval",
       "state": "fail",
       "actor": "ai",
-      "title_zh": "Codex 抽测没过：对外发送前先问你",
+      "title_zh": "Codex 没通过规则测试：对外发送前先问你",
       "impact_zh": "Codex 没守住这些规则，平时用也可能照样犯",
       "steps": [
         {
           "who": "ai",
-          "text_zh": "看这次抽测的回复，找出哪条规则没守住、为什么",
+          "text_zh": "看这次规则测试的回复，找出哪条规则没守住、为什么",
           "command": null,
           "confirm": false
         },
         {
           "who": "ai",
-          "text_zh": "改好规则或用例后重跑抽测",
+          "text_zh": "改好规则或用例后重新做规则测试",
           "command": "bin/agent-env eval --target mac/codex",
           "confirm": false
         }
@@ -940,7 +940,7 @@
       "category": "eval_error",
       "state": "err",
       "actor": "notice",
-      "title_zh": "Claude Code 的抽测运行器出错（2 项）：修完不擅自提交、对外发送前先问你",
+      "title_zh": "Claude Code 的规则测试运行器出错（2 项）：修完不擅自提交、对外发送前先问你",
       "impact_zh": "这几项这次没测到，结论记为未核实（UNVERIFIED）",
       "steps": [
         {
@@ -951,7 +951,7 @@
         },
         {
           "who": "ai",
-          "text_zh": "处理后重跑抽测",
+          "text_zh": "处理后重新做规则测试",
           "command": "bin/agent-env eval --target mac/claude-code",
           "confirm": false
         }
@@ -975,7 +975,7 @@
       "explain_zh": "按这台机器或这个 agent 的需要有意改过，是预期内的"
     },
     "drift": {
-      "label_zh": "漂移",
+      "label_zh": "不一致",
       "explain_zh": "和清单期望的不一样，要修"
     },
     "missing": {
@@ -1020,7 +1020,7 @@
     },
     "pass": {
       "label_zh": "通过",
-      "explain_zh": "这次抽测 agent 守住了规则"
+      "explain_zh": "这次规则测试里 agent 守住了规则"
     },
     "fail": {
       "label_zh": "没过",
@@ -1028,11 +1028,11 @@
     },
     "err": {
       "label_zh": "出错",
-      "explain_zh": "抽测工具自己出错，这次没测到，结论未核实"
+      "explain_zh": "规则测试工具自己出错，这次没测到，结论未核实"
     },
     "skip": {
       "label_zh": "跳过",
-      "explain_zh": "这个用例不适用，或这个 agent 没法抽测"
+      "explain_zh": "这个用例不适用，或这个 agent 没法做规则测试"
     },
     "safety": {
       "label_zh": "安全层",

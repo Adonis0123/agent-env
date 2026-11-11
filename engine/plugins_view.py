@@ -511,7 +511,7 @@ def _compose_note(statuses, env: str):
         for t in e.get("targets", []) or []:
             for h in (t.get("habits", []) or []) if isinstance(t, dict) else []:
                 if isinstance(h, dict) and h.get("expect_kind") == "composed" and h.get("state") in ("missing", "drift"):
-                    text = "规则文件还没按插件合成" if h["state"] == "missing" else "规则文件和插件合成的不一致"
+                    text = "规则文件还没生成" if h["state"] == "missing" else "规则文件和应该生成的内容不一致"
                     return _note(f"compose_{h['state']}", h["state"], text, _str(h.get("fix")))
     return None
 

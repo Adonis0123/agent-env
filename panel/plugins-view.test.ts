@@ -44,10 +44,12 @@ test("plugins tab: four columns from the sources to the environments, each repos
   // what is wrong, what it means, the engine's detail, the remedy in words, and a sentence to give the AI
   assert.match(p, /agent-plugin-company<\/a><span class="pv-vis v-unknown" data-tip="查不到这个仓库是公开还是私有，所以没法确认私有内容没有被公开。\ntool 没查到：401 Unauthorized">没查到<\/span><\/div><p class="pv-why">查不到这个仓库是公开还是私有，所以没法确认私有内容没有被公开。<\/p><p class="pv-why">tool 没查到：401 Unauthorized<\/p><span class="pv-fix">确认能联网并已登录（tool login）[^<]*<\/span><span class="pv-cmd"><button[^>]*data-copy="帮我处理这个问题：查不到 agent-plugin-company 这个仓库是公开还是私有（tool 没查到：401 Unauthorized）。面板给的做法是：确认能联网并已登录（tool login）[^"]*。要运行命令的话，在本机的 \/home\/example-user\/agent-home\/vendor\/agent-env 目录里运行。会改动或上传东西的步骤，先给我看，等我同意再做。" data-ai-copy[^>]*>复制给 AI</);
   // the view bar: when it was checked, how many are unknown, the refresh command, the AI button
-  assert.match(p, /<div class="viewbar pv-bar"><p class="pv-checked">仓库公开还是私有：查于 今天 \d\d:\d\d<span class="pv-unknown-n">1 个没查到<\/span><span class="pv-refresh">重新查：<\/span><span class="pv-cmd"><button type="button" class="lt-btn lt-btn-sm lt-btn-ghost" data-copy="帮我重新查一下各个仓库是公开还是私有（在 \/home\/example-user\/agent-home\/vendor\/agent-env 目录里运行 bin\/agent-env plugin repos --refresh）。" data-ai-copy[^>]*>复制给 AI<\/button><code>bin\/agent-env plugin repos --refresh<\/code><\/span>/);
+  assert.match(p, /<div class="viewbar pv-bar"><p class="pv-checked">仓库公开还是私有：查于 今天 \d\d:\d\d<span class="pv-unknown-n">1 个没查到<\/span><span class="pv-refresh">重新查：<\/span><span class="pv-cmd"><button type="button" class="lt-btn lt-btn-sm lt-btn-ghost" data-copy="帮我重新查一下各个仓库是公开还是私有（在 \/home\/example-user\/agent-home\/vendor\/agent-env 目录里运行 bin\/agent-env plugin repos --refresh）。" data-ai-copy[^>]*>复制给 AI<\/button><code><span class="tok">bin\/agent-env<\/span> <span class="tok">plugin<\/span> <span class="tok">repos<\/span> <span class="tok">--refresh<\/span><\/code><\/span>/);
   // a command that writes asks the AI to show the change first; no button copies a bare command
   assert.match(p, /data-copy="帮我处理这个问题：agent-plugin-public: 未推送（在 [^ ]+ 目录里运行 bin\/agent-env plugin publish --all）。会改动或上传东西的步骤，先给我看，等我同意再做。"/);
-  for (const m of p.matchAll(/data-copy="([^"]*)"/g)) assert.match(unesc(m[1]), /^帮我/, "every copy button copies a sentence for an AI");
+  // the only other copy buttons are 「复制路径」 under a path (files.ts fileRow)
+  for (const m of p.matchAll(/data-copy="([^"]*)"(?! data-tip="~)/g)) assert.match(unesc(m[1]), /^帮我/, "every copy button copies a sentence for an AI");
+  assert.deepEqual([...p.matchAll(/data-copy="([^"]*)" data-tip="\1">复制路径</g)].map((m) => m[1]), ["~/.claude", "~/.agents", "~/.local/state/agent-env/plugins"]);
   assert.match(p, new RegExp(`<button type="button" class="lt-btn lt-btn-sm" data-ask="${PLUGINS_PRESET}" data-fact="fact-plugins"[^>]*>让 AI 调整插件</button>`));
   assert.match(p, /<textarea id="fact-plugins" hidden readonly>/);
   // repository notes from the engine, with their fix
@@ -84,7 +86,7 @@ test("plugins tab: one of the user's own machines on plugins composes them itsel
     const file = join(dir, "status.json");
     writeFileSync(file, JSON.stringify(data));
     const p = panel(await fragment(file));
-    assert.match(p, /<li class="pv-node pv-env"><div class="pv-node-h"><span class="pv-name">Mac<\/span><\/div><p class="pv-sub">本机按插件合成<\/p><p class="pv-what">demo-public、demo-personal、demo-mac<\/p><\/li>/);
+    assert.match(p, /<li class="pv-node pv-env"><div class="pv-node-h"><span class="pv-name">Mac<\/span><\/div><p class="pv-sub">本机自动生成<\/p><p class="pv-what">demo-public、demo-personal、demo-mac<\/p><\/li>/);
     assert.doesNotMatch(p, /Mac<\/span><\/div><p class="pv-sub">本机<\/p>/, "not the bare transport any more");
   } finally {
     rmSync(dir, { recursive: true, force: true });

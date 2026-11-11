@@ -63,8 +63,8 @@ TEMPLATES = {
     ("habit", "missing", "generated"): ("{who}的{what}还没生成", "{who}启动时读不到这份规则"),
     ("habit", "drift", "generated"): ("{who}的{what}和清单生成的不一致",
                                       "{who}读到的规则和源不同，可能缺新规则，或带着手改的内容"),
-    ("habit", "missing", "composed"): ("{who}的{what}还没按插件合成", "{who}启动时读不到共享规则"),
-    ("habit", "drift", "composed"): ("{who}的{what}和插件合成的不一致",
+    ("habit", "missing", "composed"): ("{who}的{what}还没生成", "{who}启动时读不到共享规则"),
+    ("habit", "drift", "composed"): ("{who}的{what}和应该生成的内容不一致",
                                      "{who}读到的规则和规则源不同，可能缺新改的规则，或带着手改的内容"),
     ("habit", "missing", "mcp"): ("{who}少了一个 MCP 工具", "{who}用不了清单里要它有的工具"),
     ("habit", "drift", "mcp"): ("{who}的 MCP 配置和清单不一致", "工具可能重复注册、连不上或用错配置"),
@@ -89,11 +89,11 @@ TEMPLATES = {
     ("habit", "drift", "portal-service"): ("{who}的门户服务没在运行", "门户和里面的工具页面都打不开"),
     ("habit", "missing", "*"): ("{who}缺少{kind}「{what}」", "{who}少了这一项，相关习惯不会生效"),
     ("habit", "drift", "*"): ("{who}的{kind}「{what}」和清单不一致", "{who}的实际做法可能和你定的规则不一样"),
-    ("eval", "fail", "*"): ("{who}抽测没过：{cases}", "{who}没守住这些规则，平时用也可能照样犯"),
-    ("eval_error", "err", "*"): ("{who}的抽测运行器出错（{n} 项）：{cases}",
+    ("eval", "fail", "*"): ("{who}没通过规则测试：{cases}", "{who}没守住这些规则，平时用也可能照样犯"),
+    ("eval_error", "err", "*"): ("{who}的规则测试运行器出错（{n} 项）：{cases}",
                                  "这几项这次没测到，结论记为未核实（UNVERIFIED）"),
     ("host_version", "changed", "*"): ("{who}升级到了 {current}（清单登记的是 {recorded}）",
-                                       "新版本可能改了规则的加载方式，分类表要重新核对"),
+                                       "新版本可能改了规则的加载方式，要让 AI 重新核对一遍"),
     ("env_unreadable", "unreadable", "branch"): ("{env}还没上报状态", "面板看不到{env}上各个 agent 的情况"),
     ("env_unreadable", "unreadable", "remote_login"): ("{env}登录过期，这次没检查成",
                                                        "{env}上各项都显示未知，问题可能被漏掉"),
@@ -110,7 +110,7 @@ TEMPLATES = {
 GLOSSARY = {
     "synced": ("已同步", "和源一致，不用管"),
     "customized": ("已定制", "按这台机器或这个 agent 的需要有意改过，是预期内的"),
-    "drift": ("漂移", "和清单期望的不一样，要修"),
+    "drift": ("不一致", "和清单期望的不一样，要修"),
     "missing": ("缺失", "应该有但没有，要补"),
     "unknown": ("未知", "没法核实，比如云端内容读不到或机器连不上"),
     "rules": ("规则", "告诉 agent 怎么做事的说明文件，如 AGENTS.md"),
@@ -121,10 +121,10 @@ GLOSSARY = {
     "user": ("要你处理", "要你亲手做或确认，比如登录、在 app 里存规则"),
     "other_env": ("去另一台机器", "要到对应的机器上跑命令"),
     "notice": ("提醒", "只是告诉你一声，通常不用动手"),
-    "pass": ("通过", "这次抽测 agent 守住了规则"),
+    "pass": ("通过", "这次规则测试里 agent 守住了规则"),
     "fail": ("没过", "agent 没守住规则"),
-    "err": ("出错", "抽测工具自己出错，这次没测到，结论未核实"),
-    "skip": ("跳过", "这个用例不适用，或这个 agent 没法抽测"),
+    "err": ("出错", "规则测试工具自己出错，这次没测到，结论未核实"),
+    "skip": ("跳过", "这个用例不适用，或这个 agent 没法做规则测试"),
     "safety": ("安全层", "安全底线相关的定制，优先级最高"),
     "env": ("环境层", "因为所在机器不同而做的定制"),
     "role": ("角色层", "因为 agent 角色不同（命令行、机器人、定时任务）而做的定制"),
@@ -586,11 +586,11 @@ def env_issues(status: dict, manifest: dict, now=None) -> list:
         cases = [str(r.get("case", "")) for r in rows]
         names = _names(who=who, cases="、".join(case_name(manifest, c) for c in cases), n=len(rows))
         if state == "fail":
-            steps = [step("ai", "看这次抽测的回复，找出哪条规则没守住、为什么"),
-                     step("ai", "改好规则或用例后重跑抽测", f"bin/agent-env eval --target {tid}")]
+            steps = [step("ai", "看这次规则测试的回复，找出哪条规则没守住、为什么"),
+                     step("ai", "改好规则或用例后重新做规则测试", f"bin/agent-env eval --target {tid}")]
         else:
             steps = [step("ai", "看运行器的报错日志，确认是宿主超时、崩溃还是运行器本身的问题"),
-                     step("ai", "处理后重跑抽测", f"bin/agent-env eval --target {tid}")]
+                     step("ai", "处理后重新做规则测试", f"bin/agent-env eval --target {tid}")]
         ref = {"kind": "eval", "name": None, "case": ",".join(cases),
                "detail": " | ".join(str(r.get("detail", "")) for r in rows)}
         out.append(_issue(f"{tid}:{category}:{state}", env, tid, category, state, "*", names, steps, ref))

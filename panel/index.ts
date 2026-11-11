@@ -2,10 +2,12 @@
 // allowedHosts, theme, readOnly, lang, ask }) per the portal contract (portal-architecture.md §4); /api/health answers
 // { app: "agent-env", version }. Its only data is `bin/agent-env status --json --all` (docs/status-schema.md); for
 // tests and previews AGENT_ENV_STATUS_FILE names a status JSON file to show instead.
-// Routes: "/" (page shell that loads the content), "/fragment" (the content), "/api/status" (the JSON as read).
+// Routes: "/" (page shell that loads the content), "/fragment" (the content), "/api/status" (the JSON as read),
+// "/api/file?id=…" (the text of one file a recent render showed a view button for, read-only; files.ts).
 import { randomBytes } from "node:crypto";
 import { homedir } from "node:os";
 import type { IncomingMessage, ServerResponse } from "node:http";
+import { type FileSet, fileSet, isFileId, readPreview } from "./files.ts";
 import { type Lang, translator } from "./i18n.ts";
 import { contentHtml, type Ctx, fragmentPage, layout } from "./page.ts";
 import { loadStatus, type LoadResult, workFolders, type WorkFolders } from "./source.ts";
@@ -66,6 +68,12 @@ export function createPanelHandler(options: PanelOptions) {
   let folders: WorkFolders | undefined = options.folders
     ? { manifest: options.folders.overlay ? `${options.folders.overlay}/manifest/habits.toml` : "", found: !!options.folders.overlay, env: "", ...options.folders }
     : undefined;
+  /** The files a page may look at: the paths each of the last few renders drew a view button for (files.ts
+   *  fileSet, filled by the render itself), newest first. Several, so two tabs showing different data do not take
+   *  each other's buttons away. The page sends an id; a path is never taken from a request. After a restart the
+   *  list is empty and nothing is read until a page is drawn again: the page says it is out of date. */
+  const RENDERS = 8;
+  const recent: FileSet[] = [];
   const hide = (s: string) => (home && home !== "/" ? s.split(home + "/").join("~/") : s);
 
   const send = (res: ServerResponse, status: number, type: string, body: string, extra: Record<string, string> = {}, head = false) => {
@@ -133,7 +141,7 @@ export function createPanelHandler(options: PanelOptions) {
     }
     const l = pickLang(req);
     const w = workIn();
-    const ctx: Ctx = { t: translator(l), lang: l, base, askBridge, now: now(), headerBar, workdir: w.run, manifest: w.manifest, noManifest: !w.found, envPrefix: w.env };
+    const ctx: Ctx = { t: translator(l), lang: l, base, askBridge, now: now(), headerBar, workdir: w.run, manifest: w.manifest, noManifest: !w.found, envPrefix: w.env, home };
     const qs = url.searchParams.get("scheme");
     const schemeNow = qs && ["auto", "light", "dark"].includes(qs) ? qs : scheme;
     const htmlHeaders = (nonce?: string) => ({
@@ -150,9 +158,25 @@ export function createPanelHandler(options: PanelOptions) {
       json(res, r.ok ? 200 : 502, r, head);
       return true;
     }
+    if (url.pathname === "/api/file") {
+      const id = url.searchParams.get("id") ?? "";
+      // an id no recent render gave out (also after a restart): the page asks the reader to refresh it
+      const stale = () => json(res, 404, { state: "stale" }, head);
+      const unlisted = () => json(res, 404, { state: "unlisted" }, head);
+      if (!isFileId(id)) return stale(), true;
+      const path = recent.map((set) => set.path(id)).find(Boolean);
+      if (!path) return stale(), true;
+      const preview = await readPreview(home, path);
+      if (preview.state === "outside") return unlisted(), true;
+      json(res, 200, preview, head);
+      return true;
+    }
     if (url.pathname === "/fragment") {
       const r = await load();
-      const body = hide(contentHtml(ctx, r, r.ok && statusFile ? r.from : undefined));
+      const files = fileSet(home);
+      const body = hide(contentHtml({ ...ctx, files }, r, r.ok && statusFile ? r.from : undefined));
+      recent.unshift(files);
+      recent.length = Math.min(recent.length, RENDERS);
       const whole = req.headers["x-env-fragment"] === "1" ? body : fragmentPage(ctx, body, schemeNow);
       send(res, 200, "text/html; charset=utf-8", whole, htmlHeaders(), head);
       return true;
