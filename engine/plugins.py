@@ -1834,7 +1834,7 @@ def _step_push(manifest, name, files, dest, h, yes=False, out=None, **_):
         _mark_pushed(url)  # the content is there, so the repository is not empty (an old cache may still say so)
         return f"{url} 的 {branch} 已有这份内容，无需推送"
     vis = visibility(get(manifest, name))
-    seen = _remote_visibility(url)
+    seen = _remote_visibility(url, manifest)
     refuse = _push_refusal(vis, seen, url)
     if not yes:
         w = out.write if out is not None else (lambda s: None)
@@ -1999,14 +1999,15 @@ def committed(name: str, files: dict) -> bool:
         return False
 
 
-def _remote_visibility(url: str) -> dict:
-    """Ask the host now whether the repository is public (plugins_view.probe; never raises)."""
+def _remote_visibility(url: str, manifest=None) -> dict:
+    """Ask the host now whether the repository is public (plugins_view.probe; never raises). A host other than
+    github.com is asked with the command the manifest's [git_hosts] declares."""
     import plugins_view  # imports this module
     key = plugins_view.repo_key(url)
     if not key:
         return {"visibility": "unknown", "error": f"认不出 {url} 是哪个托管上的仓库",
                 "fix": "repo 写成 https://<托管>/<owner>/<仓库> 或 git@<托管>:<owner>/<仓库>.git"}
-    return plugins_view.probe(key)
+    return plugins_view.probe(key, hosts=plugins_view.git_hosts(manifest or {}))
 
 
 def _mark_pushed(url: str, seen=None) -> None:

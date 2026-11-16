@@ -36,7 +36,7 @@ class PublishBase(PluginBase):
         env.start()
         self.addCleanup(env.stop)
         self.seen = dict(PUBLIC_REPO)
-        probe = mock.patch.object(plugins, "_remote_visibility", side_effect=lambda url: self.seen)
+        probe = mock.patch.object(plugins, "_remote_visibility", side_effect=lambda url, manifest=None: self.seen)
         self.probe = probe.start()
         self.addCleanup(probe.stop)
 
@@ -214,6 +214,16 @@ class IdentityTests(PublishBase):
 
     def test_other_hosts_use_the_global_identity(self):
         self.assertIsNone(plugins._identity(self.url))  # none set: git decides
+
+
+class RemoteVisibilityTests(unittest.TestCase):
+    def test_a_host_declared_in_git_hosts_is_asked_with_its_command(self):
+        spec = {"command": ["tool", "repo", "show", "--repo", "{repo}"], "visibility": r"^level:\s*(\w+)"}
+        manifest = {"git_hosts": {"git.example.com": spec}}
+        with mock.patch.object(plugins_view, "probe", return_value=dict(PRIVATE_REPO)) as probe:
+            seen = plugins._remote_visibility("https://git.example.com/owner/agent-plugin", manifest)
+        self.assertEqual(seen["visibility"], "private")
+        self.assertEqual(probe.call_args.kwargs["hosts"], {"git.example.com": spec})
 
 
 if __name__ == "__main__":
