@@ -32,7 +32,7 @@ flowchart TB
   DOC["<b>doctor</b> → status JSON → 面板"]
 
   SRC -->|"plugin build → 扫描 → publish"| PLG
-  PLG -->|"本机合成 AGENTS.md"| LAP
+  SRC -->|"按落点的插件顺序<br/>本机合成 AGENTS.md"| LAP
   PLG -->|"systemd 定时拉取"| SRV
   PLG -->|"指路规则，bot 自己拉"| BOT
   LAP -.->|体检| DOC

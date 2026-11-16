@@ -17,6 +17,8 @@ Goals:
 - **One source.** Rules are edited in one place, split by who may read them, and every target is derived from it.
 - **Everything is a plugin.** Public and private differ only in which plugins a target installs.
 - **Targets fetch, nothing is pushed into them.** A target this machine cannot write to still stays current.
+  This holds for plugin targets; a remote target that does not use plugins yet still gets the whole rules file
+  written by `deliver` (section 3.2).
 - **Every target is checked.** One doctor reports every expectation of every target, with a fix for each finding.
 - **Private by default, dry run by default.** Nothing without a visibility leaves the machine; nothing is pushed,
   installed remotely or replaced without `--yes` / `--write`.
@@ -151,6 +153,7 @@ flowchart LR
 | a host on one of your own machines | local | `engine/compose.py` merges the target's plugins into `rules_output`; written by `render --target <id> --write` or by the environment's `sync_command`. Other hosts on the machine link to the file (`link`) or load it through a hook (`contains`) | `composed`, `plugins`, `link`, `contains` |
 | a bot on your own machine that needs its own file | local | `render` writes `supplement` + sections selected by role into `output` / `also_output` | `generated` |
 | a host on a remote server | `remote-exec` | `deliver --target <id> --yes` installs `features/plugin-pull/`; the systemd user timer runs `agent-env-pull` every 30 minutes | `pulled`, `service`, `login`, `secrets`, `company-skills` |
+| a host on a remote server that does not use plugins yet (legacy, migration stage 3) | `remote-exec` | `deliver --target <id> --yes` renders the whole rules file on this machine and `engine/remote.py` (`remote.deliver`) writes it to the target's `output`: old file backed up, sent in chunks through `send`, sha256 checked, replaced atomically | `generated` (remote file hash) |
 | a vendor-hosted bot | `cloud-hosted` | the user pastes the pointer rule into the bot's memory; the bot pulls the plugin repositories itself | `delivered` (pointer hash), `plugins`, `token` |
 
 #### Compose (own machines)
@@ -170,8 +173,8 @@ sequenceDiagram
   participant GIT as "plugin repositories"
   SRC->>HOST: "deliver --yes: back up, install kit and pull.conf"
   HOST->>GIT: "preview run: fetch --depth 1 per plugin"
-  HOST-->>SRC: "preview file"
-  SRC->>SRC: "compare preview with joined_rules"
+  HOST-->>SRC: "preview sha256"
+  SRC->>SRC: "compare it with the sha256 of joined_rules"
   SRC->>HOST: "enable timer only if equal"
   loop "every 30 minutes"
     HOST->>GIT: "fetch each plugin"
@@ -230,7 +233,7 @@ Everything in `engine/` is Python 3.11+, standard library only.
 | `engine/expect/` | one module per expectation kind plus the `REGISTRY` (see section 9) |
 | `engine/gitleaks.toml` | the engine's own gitleaks rules used when scanning plugins |
 | `features/plugin-pull/` | `agent-env-pull` (POSIX sh), `agent-env-pull.service` and `.timer` (every 30 minutes) |
-| `panel/` | the Environments panel (TypeScript, no dependencies): `source.ts` runs `status --json --all`, `model.ts` parses it, `page.ts` and `plugins-view.ts` render, `index.ts` is the portal handler, `dev-server.ts` serves it alone |
+| `panel/` | the Environments panel (TypeScript, no dependencies): `source.ts` runs `status --json --all`, `model.ts` parses it, `page.ts` and `plugins-view.ts` render, `index.ts` is the portal handler, `files.ts` previews listed files for `/api/file`, `ai-copy.ts` writes the "copy for AI" texts, `i18n.ts` holds the English and Chinese strings, `dev-server.ts` serves it alone |
 | `skills/agent-env/` | the runbook skill an agent follows to operate the engine |
 
 Expectation kinds in `engine/expect/`: `link`, `contains`, `generated`, `delivered`, `login`, `service`,
@@ -261,11 +264,16 @@ flowchart LR
 - **status --json** is doctor's result in schema 1. `--commit` stores it on the local branch `status/<env>`
   with git plumbing only (the work tree, index and current branch are not touched); `--push` sends it.
   `--all` merges the live result, the cloud-hosted environments driven from this machine, and every other
-  `status/<env>` branch, then adds `issues`, `glossary`, `relations` and `plugins_view`.
+  `status/<env>` branch, then adds `issues`, `glossary`, `relations` and `plugins_view`. Before that, `--all`
+  re-asks the code host about repositories whose visibility is missing from the cache or older than a day
+  (`plugins_view.check_due`, a few seconds at most) and writes the answers to `repo-visibility.json`; a full
+  re-ask is `plugin repos --refresh`.
 - **issues** decides who acts (user, AI, notice, another environment) from data tables; the panel never infers it.
-- **panel** only reads `status --json --all` (or a fixture file via `AGENT_ENV_STATUS_FILE`) and renders tabs:
+- **panel** reads `status --json --all` (or a fixture file via `AGENT_ENV_STATUS_FILE`) and renders tabs:
   to do, by machine, overview, relations, plugins. It is mounted by a local tools portal or served by
-  `dev-server.ts`.
+  `dev-server.ts`. Besides the status it reads one kind of local file: `/api/file?id=…` returns a read-only
+  preview of a file that a recent render showed a view button for (`files.ts`); the page sends an id, never a
+  path, and paths outside the home folder or that look like secrets get no id.
 - **eval** runs behaviour spot checks and stores results in `state/eval/<env>.json`, which `status` reads.
 
 ## 6. Publish pipeline and privacy

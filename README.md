@@ -32,7 +32,7 @@ flowchart TB
   DOC["<b>doctor</b> → status JSON → panel"]
 
   SRC -->|"plugin build → scan → publish"| PLG
-  PLG -->|"compose AGENTS.md locally"| LAP
+  SRC -->|"compose AGENTS.md locally,<br/>in the target's plugin order"| LAP
   PLG -->|"pull on a systemd timer"| SRV
   PLG -->|"pointer rule, the bot pulls"| BOT
   LAP -.->|check| DOC
