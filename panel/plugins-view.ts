@@ -250,7 +250,7 @@ function generatorNode(k: PluginsKit, v: PluginsView): string {
     const [bs, bw] = BUILD[p.build.state] ?? ["unknown", "build state unknown"];
     const [ps, pw] = PUBLISH[p.publish.state] ?? ["unknown", "publish state unknown"];
     const marks = [[bs, bw, p.build.detail], [ps, pw, p.publish.detail]].filter(([state]) => !(away && state === "none")).map(([state, word, tip]) => k.mark(state, k.t(word), tip)).join("");
-    return `<li class="pv-plugin"><span class="pv-pl-h"><span class="pv-pl">${k.esc(p.name)}</span><span class="pv-tag" data-tip="${k.esc(k.t(VIS_TIP[p.visibility]))}">${k.esc(k.t(VIS_LABEL[p.visibility]))}</span></span>${marks ? `<span class="pv-pl-s">${marks}</span>` : ""}${p.build.fix ? fixText(k, p.build.fix, `${p.name}: ${k.t(bw)}`) : ""}</li>`;
+    return `<li class="pv-plugin"><span class="pv-pl-h"><span class="pv-pl">${k.esc(p.name)}</span><span class="lt-badge" data-tip="${k.esc(k.t(VIS_TIP[p.visibility]))}">${k.esc(k.t(VIS_LABEL[p.visibility]))}</span></span>${marks ? `<span class="pv-pl-s">${marks}</span>` : ""}${p.build.fix ? fixText(k, p.build.fix, `${p.name}: ${k.t(bw)}`) : ""}</li>`;
   }).join("");
   const output = away ? "" : `<p class="pv-sub">${k.esc(k.t("Builds into {path}", { path: g.output }))}</p>${k.file(g.output)}`;
   return `<li class="pv-node">${repoLine(k, repoOf(v, g.repo), g.name)}${output}${own}${plugins ? `<ul class="pv-plugins">${plugins}</ul>` : `<p class="pv-sub">${k.esc(k.t("No plugins defined"))}</p>`}</li>`;
@@ -386,7 +386,6 @@ export const PLUGINS_CSS = `
   .pv-pl-s .ic { width: 14px; height: 14px; }
   .pv-pl { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; overflow-wrap: anywhere; }
   .pv-holds, td.c .pv-pl { display: flex; flex-wrap: wrap; gap: 2px 8px; }
-  .pv-tag { font-size: 12px; color: var(--kit-muted, #666); }
   .pv-notes { display: grid; gap: 4px; margin: 4px 0 0; padding: 0; list-style: none; font-size: 12px; }
   .pv-notes > li { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 8px; min-width: 0; }
   .pv-notes .ic { width: 14px; height: 14px; }

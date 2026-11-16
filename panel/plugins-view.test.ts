@@ -103,7 +103,7 @@ test("plugins tab: on a machine that only uses the plugins, one sentence names w
   // a plugin's line is its name and who may read it: no build or push mark, no build folder, no command
   const rows = [...p.matchAll(/<li class="pv-plugin">(.*?)<\/li>/g)].map((m) => m[1].replace(/ data-tip="[^"]*"/g, ""));
   assert.deepEqual(rows, [["demo-public", "公开"], ["demo-personal", "个人"], ["demo-company", "公司"], ["demo-mac", "本机"], ["demo-wsl", "本机"]].map(
-    ([name, vis]) => `<span class="pv-pl-h"><span class="pv-pl">${name}</span><span class="pv-tag">${vis}</span></span>`));
+    ([name, vis]) => `<span class="pv-pl-h"><span class="pv-pl">${name}</span><span class="lt-badge">${vis}</span></span>`));
   assert.doesNotMatch(p, /未生成|未推送|生成结果过期|仓库里是旧版|生成到|另一台电脑|不用生成/);
   const flow = p.slice(0, p.indexOf('id="pv-gets-h"'));
   assert.doesNotMatch(flow, /m-missing|m-fail|is-alert/, "no plugin or repository is framed as broken");

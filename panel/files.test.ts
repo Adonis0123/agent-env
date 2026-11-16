@@ -270,9 +270,9 @@ test("only this machine's paths: another machine's get 复制路径 and a note, 
   const html = await fragment();
   const mine = pane(html, "a:mac/codex");
   const theirs = pane(html, "a:vps/codex");
-  assert.match(mine, /data-copy="~\/\.claude\/AGENTS\.md"[^>]*>复制路径<\/button><button type="button" class="linkish" data-view="[0-9a-f]{16}" aria-expanded="false">查看内容<\/button><span class="fv-open" data-open-path="~\/\.claude\/AGENTS\.md"/);
+  assert.match(mine, /data-copy="~\/\.claude\/AGENTS\.md"[^>]*>复制路径<\/button><button type="button" class="lt-btn-link" data-view="[0-9a-f]{16}" aria-expanded="false">查看内容<\/button><span class="fv-open" data-open-path="~\/\.claude\/AGENTS\.md"/);
   assert.ok(!mine.includes("这个文件在另一台电脑上"));
-  assert.match(theirs, /<div class="fv"><p class="fv-acts"><span class="fv-label">[^<]+<\/span><button type="button" class="linkish" data-copy="~\/remote\/rules\.md" data-tip="~\/remote\/rules\.md">复制路径<\/button><span class="fv-far">这个文件在另一台电脑上<\/span><\/p><\/div>/);
+  assert.match(theirs, /<div class="fv"><p class="fv-acts"><span class="fv-label">[^<]+<\/span><button type="button" class="lt-btn-link" data-copy="~\/remote\/rules\.md" data-tip="~\/remote\/rules\.md">复制路径<\/button><span class="fv-far">这个文件在另一台电脑上<\/span><\/p><\/div>/);
   assert.ok(!theirs.includes("data-view") && !theirs.includes("data-open-path"), "no view or open button for another machine");
   // the path only the other machine has is not on the server's list, though a file of that name exists here
   assert.equal((await file(idOf("~/remote/rules.md"))).status, 404);
@@ -714,7 +714,7 @@ test("what the reader sees: folder or file on the button, the file's place above
   const home = tmpHome({ ".claude/AGENTS.md": "rules\n", "agent-rules/docs/a.md": "a", ".agents/skills/": "" });
   const { fragment, get } = await serve({ statusFile: FIX("v8-plugins"), home });
   const html = await fragment();
-  const row = (path: string) => new RegExp(`<button type="button" class="linkish" data-view="${idOf(path)}"( data-folder)? aria-expanded="false">([^<]*)</button>.*?<div class="fv-body" hidden><p class="fv-cap">([^<]*)</p><p class="fv-state" role="status"></p><p class="fv-intro" hidden>([^<]*)</p><pre class="fv-text" tabindex="0" hidden></pre></div>`).exec(html)!.slice(1);
+  const row = (path: string) => new RegExp(`<button type="button" class="lt-btn-link" data-view="${idOf(path)}"( data-folder)? aria-expanded="false">([^<]*)</button>.*?<div class="fv-body" hidden><p class="fv-cap">([^<]*)</p><p class="fv-state" role="status"></p><p class="fv-intro" hidden>([^<]*)</p><pre class="fv-text" tabindex="0" hidden></pre></div>`).exec(html)!.slice(1);
   assert.deepEqual(row("~/.claude/AGENTS.md"), [undefined, "查看内容", "~/.claude/AGENTS.md", "这个文件夹里有："]);
   assert.deepEqual(row("~/.agents"), [" data-folder", "查看文件夹", "~/.agents", "这个文件夹里有："]);
   assert.deepEqual(row("~/.claude").slice(0, 2), [" data-folder", "查看文件夹"]);

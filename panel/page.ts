@@ -410,12 +410,11 @@ export const CSS = `
   html[lang|="zh"] .fresh-label { margin-right: 0; }
   .fresh .is-stale { color: var(--kit-warn, #a44d00); font-weight: 600; }
   .fresh .sep { margin: 0 4px; color: var(--kit-faint, #999); }
-  .linkish { padding: 0; border: 0; background: none; color: var(--kit-accent, #43721d); font: inherit; text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
   .preview-note { font-size: 12px; color: var(--kit-faint, #999); }
 
   /* glossary drawer: the one copy of the glossary, opened from the footer */
   dialog.drawer { position: fixed; inset: 0 0 0 auto; width: min(380px, 100vw); height: 100%; max-height: 100%; margin: 0; padding: 0; border: 0; border-left: 1px solid var(--kit-border, #ddd); background: var(--kit-surface, #fff); color: var(--kit-text, inherit); overflow: auto; }
-  dialog.drawer::backdrop { background: rgb(0 0 0 / 0.28); }
+  dialog.drawer::backdrop { background: color-mix(in srgb, var(--lt-shadow-tint) 28%, transparent); }
   .drawer-h { position: sticky; top: 0; display: flex; align-items: center; justify-content: space-between; padding: 16px 20px 12px; background: var(--kit-surface, #fff); border-bottom: 1px solid var(--kit-border, #ddd); }
   .drawer-h h2 { font-size: 15px; font-weight: 600; }
   .drawer-body { padding: 4px 20px 24px; font-size: 13px; }
@@ -701,7 +700,7 @@ function noManifestHtml(ctx: Ctx, tag: "span" | "p"): string {
 function footHtml(ctx: Ctx, all: AllStatus, preview?: string, glossary = true, todos: Todo[] = []): string {
   const { t } = ctx;
   const note = preview ? `<span class="preview-note">${esc(t("Preview data from {file}", { file: preview }))}</span>` : "";
-  const link = glossary ? `<button type="button" class="linkish" data-gloss aria-haspopup="dialog" aria-controls="gloss">${esc(t("Glossary"))}</button>` : "";
+  const link = glossary ? `<button type="button" class="lt-btn-link" data-gloss aria-haspopup="dialog" aria-controls="gloss">${esc(t("Glossary"))}</button>` : "";
   return `<footer class="foot">${freshHtml(ctx, all, todos)}${note}${noManifestHtml(ctx, "span")}${link}</footer>`;
 }
 
@@ -1065,7 +1064,7 @@ function relPane(ctx: Ctx, v: View, all: AllStatus, g: RelationGraph, n: RelNode
     const role = n.roles.map((x) => (ROLE_LABELS[x] ? t(ROLE_LABELS[x]) : x)).join(" · ");
     const ks = agentKinds(n);
     extra = ` data-default-kind="${(ks.find((k) => k.problems.length) ?? ks[0])?.kind ?? ""}"`;
-    body = `<header class="rp-head"><h3>${esc(agentName(ctx, n))}</h3><p class="rp-meta">${esc([env?.label ?? n.env, role].filter(Boolean).join(" · "))}<button type="button" class="linkish" data-goto="${esc(n.id)}" data-goto-env="${esc(n.env)}">${esc(t("See it under Machines"))}</button></p></header>${agentDetail(ctx, v, g, n, "tabs")}`;
+    body = `<header class="rp-head"><h3>${esc(agentName(ctx, n))}</h3><p class="rp-meta">${esc([env?.label ?? n.env, role].filter(Boolean).join(" · "))}<button type="button" class="lt-btn-link" data-goto="${esc(n.id)}" data-goto-env="${esc(n.env)}">${esc(t("See it under Machines"))}</button></p></header>${agentDetail(ctx, v, g, n, "tabs")}`;
   }
   return `<section class="rel-pane" data-pane="${esc(n.key)}"${extra} hidden>${body}<p class="rp-hint">${esc(t("Click it again or press Esc to see everything"))}</p></section>`;
 }
@@ -1143,7 +1142,7 @@ function relationHtml(ctx: Ctx, v: View, all: AllStatus): string {
         .filter((a) => a.env === e.id)
         .map((a, ai) => {
           const key = `rt-${ei}-${ai}`;
-          return `<li class="rt-agent${relAlert(a) ? " is-alert" : ""}${a.aux ? " is-aux" : ""}"><button type="button" class="rt-name" aria-expanded="false" aria-controls="${key}" data-toggle="${key}"><span class="rt-label">${esc(agentName(ctx, a))}</span><span class="rc-row">${relCells(ctx, v, a, false)}</span></button><div class="rt-detail" id="${key}" hidden><p class="rp-meta"><button type="button" class="linkish" data-goto="${esc(a.id)}" data-goto-env="${esc(a.env)}">${esc(t("See it under Machines"))}</button></p>${agentDetail(ctx, v, g, a, "flat")}</div></li>`;
+          return `<li class="rt-agent${relAlert(a) ? " is-alert" : ""}${a.aux ? " is-aux" : ""}"><button type="button" class="rt-name" aria-expanded="false" aria-controls="${key}" data-toggle="${key}"><span class="rt-label">${esc(agentName(ctx, a))}</span><span class="rc-row">${relCells(ctx, v, a, false)}</span></button><div class="rt-detail" id="${key}" hidden><p class="rp-meta"><button type="button" class="lt-btn-link" data-goto="${esc(a.id)}" data-goto-env="${esc(a.env)}">${esc(t("See it under Machines"))}</button></p>${agentDetail(ctx, v, g, a, "flat")}</div></li>`;
         })
         .join("");
       return `<section class="rt-env${relAlert(e) ? " is-alert" : ""}${e.report && e.report.kind !== "report" ? " is-unreported" : ""}"><h3 class="rt-h"><span>${esc(e.label)}</span><span class="rt-sub">${esc(short)}</span></h3>${rows ? `<ul class="rt-agents">${rows}</ul>` : ""}</section>`;

@@ -287,13 +287,13 @@ export function fileRow(k: FileKit, path: string, local: boolean, label = ""): s
   if (!path) return "";
   const { t, esc } = k;
   const name = label ? `<span class="fv-label">${esc(label)}</span>` : "";
-  const copy = `<button type="button" class="linkish" data-copy="${esc(path)}" data-tip="${esc(path)}">${esc(t("Copy path"))}</button>`;
+  const copy = `<button type="button" class="lt-btn-link" data-copy="${esc(path)}" data-tip="${esc(path)}">${esc(t("Copy path"))}</button>`;
   const shown = local ? tilde(path, k.home) : null;
   if (!shown) return `<div class="fv"><p class="fv-acts">${name}${copy}${local ? "" : `<span class="fv-far">${esc(t("This file is on another computer"))}</span>`}</p></div>`;
   const id = k.files?.issue(shown) ?? null;
   const folder = !!id && !!k.files?.isFolder(shown);
   // the page script turns the words into 收起 while the block is open, and back
-  const view = id ? `<button type="button" class="linkish" data-view="${id}"${folder ? " data-folder" : ""} aria-expanded="false">${esc(t(folder ? "View folder" : "View"))}</button>` : "";
+  const view = id ? `<button type="button" class="lt-btn-link" data-view="${id}"${folder ? " data-folder" : ""} aria-expanded="false">${esc(t(folder ? "View folder" : "View"))}</button>` : "";
   const slot = `<span class="fv-open" data-open-path="${esc(shown)}" data-open-name="${esc(basename(shown))}" hidden></span>`;
   const body = id ? `<div class="fv-body" hidden><p class="fv-cap">${esc(shown)}</p><p class="fv-state" role="status"></p><p class="fv-intro" hidden>${esc(t("In this folder:"))}</p><pre class="fv-text" tabindex="0" hidden></pre></div>` : "";
   return `<div class="fv"${id ? " data-fv" : ""}><p class="fv-acts">${name}${copy}${view}${slot}</p>${body}</div>`;
