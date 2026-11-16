@@ -423,7 +423,7 @@ test("v7 relation tab: sources and machine boxes, four cells per agent, paths an
   assert.match(all, /<div class="rbox is-unreported"/, "the machine that never reported: a dashed grey box");
   assert.doesNotMatch(all, /data-on="[^"]*" *\/><path[^>]*e:wsl|<path [^>]*data-on="[^"]*e:wsl/, "no line into it");
   // an agent: its name pins it, its four cells pin a kind; the problem cell shows its count
-  assert.match(all, /<div class="rn n-agent s-missing is-alert"[^>]*data-node="a:grok-bot\/bot"[^>]*><button type="button" class="rn-name" data-focus="a:grok-bot\/bot">Grok Bot<\/button>(<button type="button" class="rc [^"]*" data-focus="ak:grok-bot\/bot\|(rules|skills|hooks|mcp)"[^>]*>.*?<\/button>){4}<\/div>/);
+  assert.match(all, /<div class="rn n-agent s-missing is-alert"[^>]*data-node="a:grok-bot\/bot"[^>]*><button type="button" class="rn-name" data-focus="a:grok-bot\/bot" data-lt-plain>Grok Bot<\/button>(<button type="button" class="rc [^"]*" data-focus="ak:grok-bot\/bot\|(rules|skills|hooks|mcp)"[^>]*>.*?<\/button>){4}<\/div>/);
   assert.match(all, /data-focus="ak:grok-bot\/bot\|rules"[^>]*>.*?<span class="num">2<\/span><\/button>/);
   // detail pane: one block per kind, the kind with a problem open, the problem first; the source once per kind, its
   // path only in hover text and "copy path"; synced items folded into one line
@@ -499,7 +499,7 @@ test("finding G: a row's buttons, one or several, sit on their own wrapping line
   assert.deepEqual(rows.map(buttons).sort(), [1, 2], "the Codex MCP row has one button, the Grok Bot rules row two");
   // the row label and its buttons are siblings: label first, then one container holding every button, so a row with
   // one button and a row with two are laid out the same way
-  for (const body of rows) assert.match(body, /^<button type="button" class="rp-row" data-focus="[^"]+"><span class="rp-row-l">.*?<\/span>.*?<\/button><div class="rp-li-acts">(<button type="button" class="lt-btn[^"]*"[^>]*>[^<]*<\/button>)+<\/div>$/s);
+  for (const body of rows) assert.match(body, /^<button type="button" class="rp-row" data-focus="[^"]+" data-lt-plain><span class="rp-row-l">.*?<\/span>.*?<\/button><div class="rp-li-acts">(<button type="button" class="lt-btn[^"]*"[^>]*>[^<]*<\/button>)+<\/div>$/s);
   assert.doesNotMatch(panel, /is-stack/);
   assert.match(rows.find((b) => buttons(b) === 2)!, /<span class="rp-row-l">.*?Grok Bot · 规则.*?<\/span>/s, "the label is the full text, not shortened");
   // the styles that make it wrap are shipped with the page

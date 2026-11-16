@@ -798,12 +798,12 @@ function machineHtml(ctx: Ctx, v: View, c: MachineCard, todos: Todo[], n: number
     .join("");
   const okKey = `ok-${n}`;
   const ok = c.ok.length
-    ? `<div class="ok-agents"><button type="button" class="disclose" aria-expanded="false" aria-controls="${okKey}" data-toggle="${okKey}">${mark("synced", !c.problem.length && !c.envTodos.length ? (c.ok.length === 1 ? t("Fine") : t("All {n} are fine", { n: c.ok.length })) : c.ok.length === 1 ? t("1 other is fine") : t("{n} others are fine", { n: c.ok.length }))}<span class="ok-names">${esc(c.ok.map((r) => hostLabel(r.host)).join(" · "))}</span><span class="chev" aria-hidden="true"></span></button>
+    ? `<div class="ok-agents"><button type="button" class="disclose" aria-expanded="false" aria-controls="${okKey}" data-toggle="${okKey}" data-lt-plain>${mark("synced", !c.problem.length && !c.envTodos.length ? (c.ok.length === 1 ? t("Fine") : t("All {n} are fine", { n: c.ok.length })) : c.ok.length === 1 ? t("1 other is fine") : t("{n} others are fine", { n: c.ok.length }))}<span class="ok-names">${esc(c.ok.map((r) => hostLabel(r.host)).join(" · "))}</span><span class="chev" aria-hidden="true"></span></button>
 <ul class="ok-list" id="${okKey}" hidden>${c.ok.map((r) => `<li data-agent="${esc(r.id)}"><span class="ok-name">${esc(hostLabel(r.host))} <span class="agent-role">${esc(roleText(ctx, r))}</span></span>${kindCells(ctx, v, r)}</li>`).join("")}</ul></div>`
     : "";
   const unKey = `un-${n}`;
   const unchecked = c.unchecked.length
-    ? `<div class="ok-agents"><button type="button" class="disclose" aria-expanded="false" aria-controls="${unKey}" data-toggle="${unKey}">${mark("unknown", t("{n} not checked this time", { n: c.unchecked.length }))}<span class="ok-names">${esc(c.unchecked.map((r) => hostLabel(r.host)).join(" · "))}</span><span class="chev" aria-hidden="true"></span></button>
+    ? `<div class="ok-agents"><button type="button" class="disclose" aria-expanded="false" aria-controls="${unKey}" data-toggle="${unKey}" data-lt-plain>${mark("unknown", t("{n} not checked this time", { n: c.unchecked.length }))}<span class="ok-names">${esc(c.unchecked.map((r) => hostLabel(r.host)).join(" · "))}</span><span class="chev" aria-hidden="true"></span></button>
 <ul class="ok-list" id="${unKey}" hidden>${c.unchecked.map((r) => `<li data-agent="${esc(r.id)}"><span class="ok-name">${esc(hostLabel(r.host))} <span class="agent-role">${esc(roleText(ctx, r))}</span></span>${kindCells(ctx, v, r)}</li>`).join("")}</ul></div>`
     : "";
   const unverified = e && e.targets.some((x) => x.verified === false) ? `<p class="machine-note">${esc(t("This machine reported these results itself; this Mac has not re-checked them"))}</p>` : "";
@@ -855,7 +855,7 @@ function cellHtml(ctx: Ctx, v: View, r: AgentRow, col: MatrixCol, its: Todo[], k
   const colWord = col === "eval" ? t("Spot-checks") : word(ctx, v, col);
   const meaning = explain(ctx, v, col === "eval" ? (state === "none" ? "none" : state) : state);
   const tip = tipText(`${colWord}: ${label}${sub ? ` · ${sub}` : ""}`, meaning);
-  const td = `<td class="c" data-label="${esc(colWord)}"><button type="button" class="cell m-${esc(state)}${its.length ? " has-todo" : ""}" aria-expanded="false" aria-controls="${key}" data-toggle="${key}" aria-label="${esc(`${colWord}: ${label}${sub ? ` · ${sub}` : ""}`)}" data-tip="${esc(tip)}">${icon(STATE_ICON[state] ?? "none")}</button></td>`;
+  const td = `<td class="c" data-label="${esc(colWord)}"><button type="button" class="cell m-${esc(state)}${its.length ? " has-todo" : ""}" aria-expanded="false" aria-controls="${key}" data-toggle="${key}" aria-label="${esc(`${colWord}: ${label}${sub ? ` · ${sub}` : ""}`)}" data-tip="${esc(tip)}" data-lt-plain>${icon(STATE_ICON[state] ?? "none")}</button></td>`;
   const what = `<div class="cell-explain"><p><strong>${esc(hostLabel(r.host))} · ${esc(colWord)}</strong> <span class="muted">${esc(explain(ctx, v, col === "eval" ? (state === "none" ? "none" : state) : col))}</span></p>${body}</div>`;
   const detail = `<tr class="cell-detail" id="${key}" hidden><td colspan="7"><div class="detail">${its.map((x, i) => todoHtml(ctx, v, x, `${key}-${i}`, { where: false })).join("")}${what}</div></td></tr>`;
   return { td, detail };
@@ -939,7 +939,7 @@ function relCells(ctx: Ctx, v: View, a: RelNode, live: boolean): string {
       const tip = `${word(ctx, v, c.kind)}${ctx.t(": ")}${what}`;
       const inner = `${icon(STATE_ICON[c.state] ?? "none")}${c.problems ? `<span class="num">${c.problems}</span>` : ""}`;
       return live
-        ? `<button type="button" class="rc m-${c.state}" data-focus="${esc(c.key)}" data-on="${esc(c.on.join(" "))}" aria-label="${esc(tip)}" data-tip="${esc(tip)}">${inner}</button>`
+        ? `<button type="button" class="rc m-${c.state}" data-focus="${esc(c.key)}" data-on="${esc(c.on.join(" "))}" aria-label="${esc(tip)}" data-tip="${esc(tip)}" data-lt-plain>${inner}</button>`
         : `<span class="rc m-${c.state}" role="img" aria-label="${esc(tip)}">${inner}</span>`;
     })
     .join("");
@@ -1018,7 +1018,7 @@ function agentDetail(ctx: Ctx, v: View, g: RelationGraph, a: RelNode, mode: "tab
       ? `<div class="lt-segmented rp-chips" role="group" aria-label="${esc(t("Habit kinds"))}">${a.kinds
           .map((c) => {
             const label = `<span>${esc(word(ctx, v, c.kind))}</span>`;
-            if (!c.total) return `<span class="rp-chip is-empty" aria-label="${esc(`${word(ctx, v, c.kind)}${t(": ")}${word(ctx, v, "none")}`)}">${label}<span class="mark m-none">${icon("none")}</span></span>`;
+            if (!c.total) return `<span class="rp-chip is-empty" data-lt-plain aria-label="${esc(`${word(ctx, v, c.kind)}${t(": ")}${word(ctx, v, "none")}`)}">${label}<span class="mark m-none">${icon("none")}</span></span>`;
             const n = c.problems || c.total;
             return `<button type="button" class="lt-seg-item rp-chip" data-focus="${esc(c.key)}" data-keep data-chip="${c.kind}" aria-pressed="${c.kind === open}">${label}<span class="mark m-${c.state}">${icon(STATE_ICON[c.state] ?? "none")}<span class="num">${n}</span></span></button>`;
           })
@@ -1030,7 +1030,7 @@ function agentDetail(ctx: Ctx, v: View, g: RelationGraph, a: RelNode, mode: "tab
 /** A compact row in a pane: an agent with its cells, or a problem cell; clicking it pins that node or cell.
  *  `after`: the row's buttons, on their own line under the label. */
 const paneRow = (key: string, left: string, right: string, after = "") =>
-  `<li${after ? ` class="rp-li"` : ""}><button type="button" class="rp-row" data-focus="${esc(key)}"><span class="rp-row-l">${left}</span>${right}</button>${after ? `<div class="rp-li-acts">${after}</div>` : ""}</li>`;
+  `<li${after ? ` class="rp-li"` : ""}><button type="button" class="rp-row" data-focus="${esc(key)}" data-lt-plain><span class="rp-row-l">${left}</span>${right}</button>${after ? `<div class="rp-li-acts">${after}</div>` : ""}</li>`;
 
 /** The To do tab's AI button for the things to do behind one cell; "" when no AI task can take them. */
 function cellAi(ctx: Ctx, v: View, env: string, agent: string, kind: string, quiet: boolean): string {
@@ -1107,16 +1107,16 @@ function relGraphHtml(ctx: Ctx, v: View, all: AllStatus, g: RelationGraph, which
   const kindHeads = KINDS.map((k) => `<span class="rc-h">${esc(word(ctx, v, k))}</span>`).join("");
   const sources = g.sources.map((n) => {
     const sub = n.problems ? `<span class="rn-bad">${esc(t("{n} with problems", { n: n.problems }))}</span>` : `<span class="rn-sub">${esc(t("{n} items", { n: n.cells }))}</span>`;
-    return `<button type="button" class="${base(n)}" style="left:${sc.x}px;width:${sc.w}px;top:${lay.y[n.key]}px;height:${lay.h.source}px" ${attrs(n)} data-focus="${esc(n.key)}" data-tip="${esc(sourceExplain(ctx, n.id))}"><span class="rn-label">${esc(sourceWord(ctx, n.id))}</span>${sub}</button>`;
+    return `<button type="button" class="${base(n)}" style="left:${sc.x}px;width:${sc.w}px;top:${lay.y[n.key]}px;height:${lay.h.source}px" ${attrs(n)} data-focus="${esc(n.key)}" data-tip="${esc(sourceExplain(ctx, n.id))}" data-lt-plain><span class="rn-label">${esc(sourceWord(ctx, n.id))}</span>${sub}</button>`;
   });
   const boxes = g.envs.map((n) => {
     const [short] = envReport(ctx, all, n);
     const label = [n.label, short, n.problems ? t("{n} with problems", { n: n.problems }) : ""].filter(Boolean).join("，");
     const frame = `<div class="rbox${unreported(n) ? " is-unreported" : ""}" style="left:${box.x}px;width:${box.w}px;top:${lay.y[n.key]}px;height:${lay.boxH[n.key]}px" aria-hidden="true"></div>`;
-    const head = `<button type="button" class="${base(n)}" style="left:${box.x}px;width:${box.w}px;top:${lay.y[n.key]}px;height:${lay.h.env}px" ${attrs(n)} data-focus="${esc(n.key)}" aria-label="${esc(label)}"><span class="rn-two"><span class="rn-label">${esc(n.label)}</span><span class="rn-sub">${esc(short)}</span></span>${kindHeads}</button>`;
+    const head = `<button type="button" class="${base(n)}" style="left:${box.x}px;width:${box.w}px;top:${lay.y[n.key]}px;height:${lay.h.env}px" ${attrs(n)} data-focus="${esc(n.key)}" aria-label="${esc(label)}" data-lt-plain><span class="rn-two"><span class="rn-label">${esc(n.label)}</span><span class="rn-sub">${esc(short)}</span></span>${kindHeads}</button>`;
     const rows = g.agents
       .filter((a) => a.env === n.id)
-      .map((a) => `<div class="${base(a)}" style="left:${box.x + 4}px;width:${box.w - 8}px;top:${lay.y[a.key]}px;height:${lay.h.agent}px" ${attrs(a)}><button type="button" class="rn-name" data-focus="${esc(a.key)}">${esc(agentName(ctx, a))}</button>${relCells(ctx, v, a, true)}</div>`)
+      .map((a) => `<div class="${base(a)}" style="left:${box.x + 4}px;width:${box.w - 8}px;top:${lay.y[a.key]}px;height:${lay.h.agent}px" ${attrs(a)}><button type="button" class="rn-name" data-focus="${esc(a.key)}" data-lt-plain>${esc(agentName(ctx, a))}</button>${relCells(ctx, v, a, true)}</div>`)
       .join("");
     return frame + head + rows;
   });
@@ -1142,7 +1142,7 @@ function relationHtml(ctx: Ctx, v: View, all: AllStatus): string {
         .filter((a) => a.env === e.id)
         .map((a, ai) => {
           const key = `rt-${ei}-${ai}`;
-          return `<li class="rt-agent${relAlert(a) ? " is-alert" : ""}${a.aux ? " is-aux" : ""}"><button type="button" class="rt-name" aria-expanded="false" aria-controls="${key}" data-toggle="${key}"><span class="rt-label">${esc(agentName(ctx, a))}</span><span class="rc-row">${relCells(ctx, v, a, false)}</span></button><div class="rt-detail" id="${key}" hidden><p class="rp-meta"><button type="button" class="lt-btn-link" data-goto="${esc(a.id)}" data-goto-env="${esc(a.env)}">${esc(t("See it under Machines"))}</button></p>${agentDetail(ctx, v, g, a, "flat")}</div></li>`;
+          return `<li class="rt-agent${relAlert(a) ? " is-alert" : ""}${a.aux ? " is-aux" : ""}"><button type="button" class="rt-name" aria-expanded="false" aria-controls="${key}" data-toggle="${key}" data-lt-plain><span class="rt-label">${esc(agentName(ctx, a))}</span><span class="rc-row">${relCells(ctx, v, a, false)}</span></button><div class="rt-detail" id="${key}" hidden><p class="rp-meta"><button type="button" class="lt-btn-link" data-goto="${esc(a.id)}" data-goto-env="${esc(a.env)}">${esc(t("See it under Machines"))}</button></p>${agentDetail(ctx, v, g, a, "flat")}</div></li>`;
         })
         .join("");
       return `<section class="rt-env${relAlert(e) ? " is-alert" : ""}${e.report && e.report.kind !== "report" ? " is-unreported" : ""}"><h3 class="rt-h"><span>${esc(e.label)}</span><span class="rt-sub">${esc(short)}</span></h3>${rows ? `<ul class="rt-agents">${rows}</ul>` : ""}</section>`;
