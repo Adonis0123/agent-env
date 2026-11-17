@@ -16,6 +16,7 @@ import argparse  # noqa: E402
 import json  # noqa: E402
 import os  # noqa: E402
 import re  # noqa: E402
+import subprocess  # noqa: E402
 from pathlib import Path  # noqa: E402
 from urllib.parse import urlparse  # noqa: E402
 
@@ -219,19 +220,87 @@ def _walk_md(root, errors=None):
     return sorted(found)
 
 
-def _check_file_registry(rep, c, kind, root, registry, visibility, discovered):
+GIT_TIMEOUT = 10
+# Set by git hooks; they would make `git -C <root>` ask about another repository.
+_GIT_ENV_DROP = ("GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE")
+
+
+def _escapes_root(rel):
+    norm = os.path.normpath(rel)
+    return os.path.isabs(rel) or norm == ".." or norm.startswith(".." + os.sep)
+
+
+def _askable(root, rel):
+    """Whether git can be asked about rel: one path git refuses (outside root, or under a
+    symlinked directory) would abort the whole `check-ignore --stdin` batch."""
+    if _escapes_root(rel):
+        return False
+    here = Path(root)
+    for part in Path(os.path.normpath(rel)).parts[:-1]:
+        here = here / part
+        if here.is_symlink():
+            return False
+    return True
+
+
+def _git_ignored(root, rels):
+    """(paths in rels that root's git repository ignores, error text or None).
+
+    An ignored file is never committed, so it never reaches another machine. When root is not in
+    a git repository, or git is not installed, nothing counts as ignored (every file still needs
+    registering, as before) and there is no error. Tracked files are never reported as ignored.
+    Any other git failure comes back as error text for the caller to report; nothing is skipped.
+    """
+    env = {k: v for k, v in os.environ.items() if k not in _GIT_ENV_DROP}
+    env["LC_ALL"] = "C"  # the "not a git repository" match below needs git's untranslated message
+
+    def git(*args, stdin=None):
+        return subprocess.run(["git", "-C", str(root), *args], input=stdin, capture_output=True,
+                              text=True, env=env, timeout=GIT_TIMEOUT)
+
+    try:
+        probe = git("rev-parse", "--is-inside-work-tree")
+    except FileNotFoundError:
+        return set(), None
+    except (OSError, subprocess.SubprocessError) as exc:
+        return set(), f"{type(exc).__name__}: {exc}"
+    if probe.returncode != 0:
+        if "not a git repository" in probe.stderr:
+            return set(), None
+        return set(), probe.stderr.strip() or f"git rev-parse 退出码 {probe.returncode}"
+    if probe.stdout.strip() != "true":  # inside .git itself
+        return set(), None
+    asked = [rel for rel in dict.fromkeys(rels) if _askable(root, rel)]
+    if not asked:
+        return set(), None
+    try:
+        proc = git("check-ignore", "--stdin", "-z", stdin="\0".join(asked) + "\0")
+    except (OSError, subprocess.SubprocessError) as exc:
+        return set(), f"{type(exc).__name__}: {exc}"
+    if proc.returncode not in (0, 1):  # 0 = some ignored, 1 = none ignored
+        return set(), proc.stderr.strip() or f"git check-ignore 退出码 {proc.returncode}"
+    return {p for p in proc.stdout.split("\0") if p}, None
+
+
+def _check_file_registry(rep, c, kind, root, registry, visibility, discovered, ignored=frozenset()):
+    """``ignored``: paths the source directory's git repository ignores. They exist only on this
+    machine, so they need no registration and must not be registered."""
     if not isinstance(registry, dict):
         rep.add(FAIL, c, f"[{c}] 不是表", f"按 \"<相对路径>\" = \"private\" 的格式登记 [{c}]")
         return
     for rel in discovered:
-        if rel not in registry:
+        if rel not in registry and rel not in ignored:
             rep.add(FAIL, c, f"{kind}「{rel}」未在 [{c}] 登记",
                     f"在 [{c}] 加一行 \"{rel}\" = \"private\"（或 public）")
     for rel, vis in registry.items():
-        norm = os.path.normpath(rel)
-        if os.path.isabs(rel) or norm == ".." or norm.startswith(".." + os.sep):
+        if _escapes_root(rel):
             rep.add(FAIL, c, f"[{c}] 登记的「{rel}」不在{kind}目录内",
                     f"登记路径必须在 {kind} 目录内")
+            continue
+        if rel in ignored:
+            rep.add(FAIL, c, f"[{c}] 登记的「{rel}」被 git 忽略，不会同步到其他机器",
+                    f"删掉 [{c}] 里的 \"{rel}\"：该文件被 git 忽略、不会同步，其他机器上会报不存在；"
+                    f"确实要同步就先改 .gitignore 让 git 跟踪它")
             continue
         if not (Path(root) / rel).is_file():
             rep.add(FAIL, c, f"[{c}] 登记的「{rel}」在{kind}目录里不存在",
@@ -263,7 +332,12 @@ def check_docs(rep, m, visibility):
         where = getattr(err, "filename", None) or root
         rep.add(FAIL, "docs", f"无法读取 docs 下的目录：{where}（{type(err).__name__}）",
                 "修好该目录的读取权限，或把它移出 docs，否则其中的文档无法核对登记")
-    _check_file_registry(rep, "docs", "文档", root, m.get("docs", {}), visibility, discovered)
+    registry = m.get("docs", {})
+    ignored, git_error = _git_ignored(root, discovered + (list(registry) if isinstance(registry, dict) else []))
+    if git_error:
+        rep.add(FAIL, "docs", f"无法向 git 查询 docs 下哪些文件被忽略：{git_error}",
+                f"在 {root} 运行 git status 看报错并修好；修好前被 git 忽略的文档也会被要求登记")
+    _check_file_registry(rep, "docs", "文档", root, registry, visibility, discovered, ignored)
 
 
 def check_hooks(rep, m, visibility):
