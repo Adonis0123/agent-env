@@ -29,7 +29,7 @@ import render
 from state import state_dir
 
 # Manifest host -> name the behaviour runner uses for it.
-RUNNER_HOSTS = {"claude-code": "claude", "codex": "codex", "grok": "grok", "cursor": "cursor"}
+RUNNER_HOSTS = {"claude-code": "claude", "codex": "codex", "grok": "grok", "cursor": "cursor", "agy": "agy"}
 # Where the runner keeps its cases, relative to the runner script's directory.
 RUNNER_CASES_DIR = Path("tests") / "fixtures" / "agents-md"
 EVAL_STATES = ("pass", "fail", "err", "skip")
