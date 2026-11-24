@@ -284,8 +284,8 @@ def read_hermes(path: Path):
 
 
 READERS = {"claude-code": read_json_servers, "cursor": read_json_servers, "pi": read_json_servers,
-           "workbuddy": read_json_servers, "codex": read_codex, "grok": read_grok,
-           "hermes": read_hermes}
+           "workbuddy": read_json_servers, "agy": read_json_servers, "codex": read_codex,
+           "grok": read_grok, "hermes": read_hermes}
 
 
 def config_path(target: dict) -> Path | None:

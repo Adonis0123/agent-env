@@ -708,7 +708,7 @@ def check_environments(rep, m):
 
 _ENV_NAME_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 MCP_TRANSPORTS = ("stdio", "http")
-MCP_HOSTS = ("claude-code", "codex", "grok", "pi", "cursor", "hermes", "workbuddy")
+MCP_HOSTS = ("claude-code", "codex", "grok", "pi", "cursor", "agy", "hermes", "workbuddy")
 
 
 def _mcp_entry_errors(name, spec, visibility, env_names=None):
